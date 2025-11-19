@@ -1,0 +1,19 @@
+# Code Owners
+# This file defines code ownership for automatic PR assignment
+# See: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Repository owner reviews all changes
+* @rauladell
+
+# Documentation
+/docs/ @rauladell
+
+# GitHub workflow files
+/.github/ @rauladell
+
+# POC code
+/poc/ @rauladell
+
+# Production scripts (when created)
+/scripts/ @rauladell
+

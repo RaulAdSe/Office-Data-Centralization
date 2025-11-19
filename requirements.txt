@@ -1,0 +1,27 @@
+# Core Dependencies (POC)
+pandas>=2.0.0
+openpyxl>=3.1.0
+python-docx>=0.8.11
+
+# Optional - Phase 2
+# watchdog>=3.0.0
+
+# Optional - Phase 3 (API)
+# fastapi>=0.104.0
+# uvicorn[standard]>=0.24.0
+# pydantic>=2.0.0
+
+# Optional - Phase 3 (Chatbot)
+# langchain>=0.1.0
+# openai>=1.0.0
+# OR
+# anthropic>=0.8.0
+
+# Optional - Phase 3 (Frontend)
+# streamlit>=1.28.0
+
+# Development Tools
+# pytest>=7.4.0
+# black>=23.0.0  # Code formatting
+# flake8>=6.1.0  # Linting
+

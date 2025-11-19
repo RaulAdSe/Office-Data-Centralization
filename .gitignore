@@ -1,5 +1,47 @@
-.venv/
+# Python
 __pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+.venv
+
+# Database
 *.db
+*.sqlite
+*.sqlite3
+*.sqbpro
+
+# Outputs
+outputs/*
+!outputs/.gitkeep
 *.xlsx
+*.xls
+*.docx
+*.doc
+
+# Backups
+backups/*
+!backups/.gitkeep
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
 .DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
+
+# Logs
+*.log
+logs/
