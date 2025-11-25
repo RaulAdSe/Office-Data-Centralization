@@ -75,6 +75,25 @@ CREATE TABLE approvals (
 CREATE INDEX idx_approvals_version ON approvals(version_id);
 
 -- ============================================================
+-- NEW: EXPLICIT PLACEHOLDER-TO-VARIABLE MAPPINGS
+-- ============================================================
+
+CREATE TABLE template_variable_mappings (
+    mapping_id      INTEGER PRIMARY KEY AUTOINCREMENT,
+    version_id      INTEGER NOT NULL REFERENCES description_versions(version_id) ON DELETE CASCADE,
+    variable_id     INTEGER NOT NULL REFERENCES element_variables(variable_id) ON DELETE CASCADE,
+    placeholder     VARCHAR(100) NOT NULL,  -- The {placeholder} name in template
+    position        INTEGER NOT NULL,       -- Order of appearance in template (1, 2, 3...)
+    created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+    
+    UNIQUE (version_id, placeholder),
+    UNIQUE (version_id, position)
+);
+
+CREATE INDEX idx_template_mappings_version ON template_variable_mappings(version_id);
+CREATE INDEX idx_template_mappings_variable ON template_variable_mappings(variable_id);
+
+-- ============================================================
 -- PART 3: PROJECTS
 -- ============================================================
 
@@ -236,6 +255,28 @@ SELECT
 FROM elements e
 JOIN element_variables ev ON e.element_id = ev.element_id
 ORDER BY e.element_code, ev.display_order;
+
+-- ============================================================
+-- NEW: VIEW TO SEE TEMPLATE MAPPINGS
+-- ============================================================
+
+CREATE VIEW v_template_variable_mappings AS
+SELECT 
+    e.element_code,
+    dv.version_id,
+    dv.version_number,
+    dv.description_template,
+    dv.state,
+    tvm.placeholder,
+    tvm.position,
+    ev.variable_name,
+    ev.variable_type,
+    ev.unit
+FROM template_variable_mappings tvm
+JOIN description_versions dv ON tvm.version_id = dv.version_id
+JOIN elements e ON dv.element_id = e.element_id
+JOIN element_variables ev ON tvm.variable_id = ev.variable_id
+ORDER BY dv.version_id, tvm.position;
 
 -- ============================================================
 -- END OF SIMPLIFIED SCHEMA
