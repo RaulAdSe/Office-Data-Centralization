@@ -16,7 +16,7 @@
   
   <!-- Title -->
   <text x="800" y="30" font-family="Arial" font-size="28" font-weight="bold" fill="#333" text-anchor="middle">COMPLETE DATABASE SCHEMA</text>
-  <text x="800" y="55" font-family="Arial" font-size="16" fill="#666" text-anchor="middle">Parametric Element Description System - 10 Tables</text>
+  <text x="800" y="55" font-family="Arial" font-size="16" fill="#666" text-anchor="middle">Parametric Element Description System - 9 Tables</text>
   
   <!-- Section backgrounds -->
   <rect x="20" y="80" width="760" height="380" rx="15" fill="#e3f2fd" stroke="#1565c0" stroke-width="3" opacity="0.3"/>
@@ -221,7 +221,7 @@
   <!-- Table count -->
   <g>
     <circle cx="1500" cy="1055" r="35" fill="#4caf50" stroke="#2e7d32" stroke-width="3"/>
-    <text x="1500" y="1067" font-family="Arial" font-size="28" fill="white" text-anchor="middle" font-weight="bold">10</text>
+    <text x="1500" y="1067" font-family="Arial" font-size="28" fill="white" text-anchor="middle" font-weight="bold">9</text>
   </g>
   <text x="1545" y="1055" font-family="Arial" font-size="14" fill="#333">Total Tables</text>
 </svg>
