@@ -19,6 +19,7 @@ class ElementVariable:
     default_value: Optional[str]
     is_required: bool = True
     description: Optional[str] = None
+    unit: Optional[str] = None  # Unit for numeric variables (cm, kg/m², etc.)
 
 @dataclass
 class ElementData:
@@ -101,20 +102,33 @@ class EnhancedElementExtractor:
         """Extract variables with proper grouping of related options"""
         variables = []
         
-        # Extract text inputs first
-        text_inputs = soup.find_all('input', type='text')
-        for i, inp in enumerate(text_inputs):
-            value = inp.get('value')
-            if value and value.isdigit():  # Likely a dimension
-                var_name = f"dimension_{i+1}" 
-                variables.append(ElementVariable(
-                    name=var_name,
-                    variable_type='TEXT',
-                    options=[],
-                    default_value=value,
-                    is_required=True,
-                    description=f"Campo numérico {i+1} (dimensiones, cantidades, etc.)"
-                ))
+        # First, try to extract variables from "Opciones" section intelligently
+        opciones_variables = self.extract_variables_from_opciones_section(soup)
+        if opciones_variables:
+            variables.extend(opciones_variables)
+            print(f"  ✓ Extracted {len(opciones_variables)} variables from Opciones section")
+        
+        # Fallback to traditional extraction if Opciones section not found
+        if not opciones_variables:
+            # Extract text inputs with context-aware naming
+            text_inputs = soup.find_all('input', type='text')
+            for i, inp in enumerate(text_inputs):
+                value = inp.get('value')
+                if value and value.replace('.','').replace(',','').isdigit():
+                    # Find context around the input to determine meaningful name
+                    var_name, description = self.identify_numeric_variable_context(inp, soup, value)
+                    if not var_name:
+                        var_name = f"dimension_{i+1}"
+                        description = f"Campo numérico {i+1} (dimensiones, cantidades, etc.)"
+                    
+                    variables.append(ElementVariable(
+                        name=var_name,
+                        variable_type='NUMERIC',
+                        options=[],
+                        default_value=value,
+                        is_required=True,
+                        description=description
+                    ))
         
         # Extract and group radio buttons
         radio_groups = self.extract_radio_groups(soup)
@@ -270,6 +284,68 @@ class EnhancedElementExtractor:
                 'description': 'Posición de la viga',
                 'keywords': ['exenta', 'recta', 'inclinada', 'beam position'],
                 'options': []
+            },
+            # Encofrado/Formwork specific variables
+            {
+                'name': 'sistema_encofrado',
+                'description': 'Sistema de encofrado',
+                'keywords': ['sistema de encofrado', 'encofrado recuperable', 'encofrado perdido', 'formwork system'],
+                'options': []
+            },
+            {
+                'name': 'tipo_encofrado',
+                'description': 'Tipo de material del encofrado',
+                'keywords': ['metálico', 'de madera', 'fenólico', 'metal', 'wood', 'phenolic'],
+                'options': []
+            },
+            {
+                'name': 'numero_usos',
+                'description': 'Número de usos del encofrado',
+                'keywords': ['número de usos', 'usos', 'number of uses'],
+                'options': []
+            },
+            {
+                'name': 'puntales',
+                'description': 'Configuración de puntales',
+                'keywords': ['puntales', 'número de puntales', 'props', 'shores'],
+                'options': []
+            },
+            {
+                'name': 'desencofrante',
+                'description': 'Agente desencofrante',
+                'keywords': ['agente desmoldeante', 'desencofrante', 'desmoldeante', 'release agent'],
+                'options': []
+            },
+            {
+                'name': 'tablones',
+                'description': 'Tablones de madera',
+                'keywords': ['tablones de madera', 'wooden planks', 'madera'],
+                'options': []
+            },
+            # Steel/Concrete composite patterns (EHX005, EHX010 type elements)
+            {
+                'name': 'prelacado',
+                'description': 'Tratamiento de prelacado',
+                'keywords': ['sin prelacado', 'con prelacado', 'prelacado', 'coating'],
+                'options': []
+            },
+            {
+                'name': 'tipo_chapa',
+                'description': 'Tipo de chapa colaborante',
+                'keywords': ['chapa colaborante', 'chapa metálica', 'steel deck', 'metal sheet'],
+                'options': []
+            },
+            {
+                'name': 'acabado_superficie',
+                'description': 'Acabado de superficie',
+                'keywords': ['galvanizado', 'galvanised', 'zinc', 'coating'],
+                'options': []
+            },
+            {
+                'name': 'tipo_hormigon_composite',
+                'description': 'Tipo de hormigón para elementos mixtos',
+                'keywords': ['haf-25', 'haf-30', 'concrete grade', 'hormigón armado'],
+                'options': []
             }
         ]
         
@@ -348,6 +424,623 @@ class EnhancedElementExtractor:
                 return parent_text
         
         return "Unknown Option"
+    
+    def identify_numeric_variable_context(self, input_elem, soup: BeautifulSoup, value: str) -> tuple[str, str]:
+        """Identify the context of a numeric input to determine meaningful variable name"""
+        # Get surrounding text for context analysis
+        label_text = self.find_input_label(input_elem, soup)
+        
+        # Enhanced context patterns for construction elements
+        numeric_patterns = {
+            # Encofrado/Formwork patterns
+            'numero_usos': {
+                'keywords': ['número de usos', 'usos', 'number of uses'],
+                'description': 'Número de usos del elemento'
+            },
+            'numero_puntales': {
+                'keywords': ['número de puntales', 'puntales', 'props per'],
+                'description': 'Número de puntales por metro cuadrado'
+            },
+            'rendimiento_desencofrante': {
+                'keywords': ['rendimiento', 'l/m', 'litr'],
+                'description': 'Rendimiento del desencofrante'
+            },
+            
+            # Steel/Concrete composite patterns (like EHX005)
+            'cuantia_acero_negativos': {
+                'keywords': ['cuantía de acero para momentos negativos', 'acero negativos', 'momentos negativos'],
+                'description': 'Cuantía de acero para momentos negativos'
+            },
+            'cuantia_acero_positivos': {
+                'keywords': ['cuantía de acero para momentos positivos', 'acero positivos', 'momentos positivos'],
+                'description': 'Cuantía de acero para momentos positivos'
+            },
+            'volumen_hormigon': {
+                'keywords': ['volumen de hormigón', 'volumen hormigón', 'volume concrete'],
+                'description': 'Volumen de hormigón'
+            },
+            'canto_losa': {
+                'keywords': ['canto de la losa', 'canto losa', 'espesor losa', 'slab depth'],
+                'description': 'Canto de la losa'
+            },
+            'altura_perfil': {
+                'keywords': ['altura del perfil', 'altura perfil', 'profile height'],
+                'description': 'Altura del perfil'
+            },
+            'intereje': {
+                'keywords': ['intereje', 'spacing', 'separación'],
+                'description': 'Intereje entre elementos'
+            },
+            'espesor_chapa': {
+                'keywords': ['espesor', 'thickness', 'grosor'],
+                'description': 'Espesor de la chapa'
+            },
+            
+            # General dimensions
+            'dimension_altura': {
+                'keywords': ['altura', 'height', 'alto'],
+                'description': 'Dimensión de altura'
+            },
+            'dimension_ancho': {
+                'keywords': ['ancho', 'width', 'largo'],
+                'description': 'Dimensión de ancho'
+            },
+            'dimension_espesor': {
+                'keywords': ['espesor', 'thickness', 'grosor'],
+                'description': 'Dimensión de espesor'
+            }
+        }
+        
+        # Check if the input value or context matches known patterns
+        context_text = (label_text + ' ' + str(value)).lower()
+        
+        for var_name, pattern in numeric_patterns.items():
+            for keyword in pattern['keywords']:
+                if keyword.lower() in context_text:
+                    return var_name, pattern['description']
+        
+        # Default fallback
+        return None, None
+    
+    def extract_variables_from_opciones_section(self, soup: BeautifulSoup) -> List[ElementVariable]:
+        """Intelligently extract ALL types of variables from CYPE's interface"""
+        variables = []
+        
+        # Strategy 1: Extract variables with units (numeric)
+        unit_variables = self.extract_variables_by_units(soup)
+        variables.extend(unit_variables)
+        
+        # Strategy 2: Extract choice/selection variables (radio, dropdown)
+        choice_variables = self.extract_choice_variables(soup)
+        variables.extend(choice_variables)
+        
+        # Strategy 3: Extract table-based variables
+        table_variables = self.extract_table_variables(soup)
+        variables.extend(table_variables)
+        
+        # Strategy 4: Extract form-based variables (fallback)
+        opciones_section = self.find_opciones_section(soup)
+        if opciones_section:
+            form_variables = self.extract_variables_from_form_elements(opciones_section, soup)
+            # Only add if not already found by other strategies
+            for var in form_variables:
+                if not any(v.name == var.name for v in variables):
+                    variables.extend([var])
+        
+        return variables
+    
+    def extract_variables_by_units(self, soup: BeautifulSoup) -> List[ElementVariable]:
+        """Extract variables by finding text with units like (kg/m²), (cm), etc."""
+        variables = []
+        
+        # Common construction units patterns (including encoding variations)
+        unit_patterns = [
+            # Weight/density (with encoding variations for ²)
+            r'\(kg/m²\)', r'\(kg/mÂ²\)', r'\(kg/m\)', r'\(t/m³\)', r'\(kg\)',
+            # Volume (with encoding variations)
+            r'\(m³/m²\)', r'\(m³/mÂ²\)', r'\(m³/m\)', r'\(l/m²\)', r'\(l/mÂ²\)', r'\(l\)',
+            # Length
+            r'\(cm\)', r'\(mm\)', r'\(m\)',
+            # Pressure/strength (with encoding variations)
+            r'\(MPa\)', r'\(N/mm²\)', r'\(N/mmÂ²\)',
+            # Temperature/percentage
+            r'\(°C\)', r'\(%\)',
+            # Construction specific
+            r'\(ud/m²\)', r'\(ud/mÂ²\)', r'\(ud\)', r'\(usos\)', r'\(años\)'
+        ]
+        
+        # Find all text that contains units
+        for pattern in unit_patterns:
+            matches = soup.find_all(string=re.compile(pattern, re.IGNORECASE))
+            
+            for match in matches:
+                # Get the parent element to look for nearby inputs
+                parent = match.parent if hasattr(match, 'parent') else None
+                if not parent:
+                    continue
+                
+                # Extract unit from the text
+                unit_match = re.search(pattern, str(match), re.IGNORECASE)
+                if unit_match:
+                    unit = unit_match.group().strip('()')
+                    
+                    # Look for input fields near this text
+                    nearby_inputs = self.find_nearby_inputs(parent, soup)
+                    
+                    for inp in nearby_inputs:
+                        value = inp.get('value', '')
+                        if value and self.is_numeric_value(value):
+                            # Create meaningful variable name from the text containing units
+                            full_text = str(match).strip()
+                            var_name = self.create_meaningful_variable_name(full_text)
+                            
+                            if var_name and not any(v.name == var_name for v in variables):
+                                variables.append(ElementVariable(
+                                    name=var_name,
+                                    variable_type='NUMERIC',
+                                    options=[],
+                                    default_value=value,  # Pure value without units
+                                    is_required=True,
+                                    description=self.clean_text(full_text),
+                                    unit=unit  # Store unit separately
+                                ))
+                                print(f"  ✓ Found unit-based variable: {var_name} = {value} {unit}")
+        
+        return variables
+    
+    def extract_choice_variables(self, soup: BeautifulSoup) -> List[ElementVariable]:
+        """Extract choice/selection variables like radio buttons, dropdowns, checkboxes"""
+        variables = []
+        
+        # Extract from radio button groups
+        radio_groups = {}
+        for radio in soup.find_all('input', type='radio'):
+            name = radio.get('name', 'unknown')
+            if name not in radio_groups:
+                radio_groups[name] = []
+            
+            label = self.find_comprehensive_label(radio, soup)
+            checked = radio.has_attr('checked')
+            
+            radio_groups[name].append({
+                'label': self.clean_text(label),
+                'value': radio.get('value', ''),
+                'checked': checked
+            })
+        
+        for group_name, options in radio_groups.items():
+            if len(options) > 1:  # Only meaningful groups
+                option_labels = [opt['label'] for opt in options if opt['label'] != "Unknown"]
+                default_value = None
+                
+                # Find checked option
+                for opt in options:
+                    if opt['checked']:
+                        default_value = opt['label']
+                        break
+                
+                if not default_value and option_labels:
+                    default_value = option_labels[0]
+                
+                if option_labels:
+                    var_name = self.create_meaningful_variable_name_from_options(option_labels) or group_name
+                    variables.append(ElementVariable(
+                        name=var_name,
+                        variable_type='RADIO',
+                        options=option_labels,
+                        default_value=default_value,
+                        is_required=True,
+                        description=f"Selección entre {len(option_labels)} opciones"
+                    ))
+                    print(f"  ✓ Found choice variable: {var_name} with {len(option_labels)} options")
+        
+        # Extract from select dropdowns
+        for select in soup.find_all('select'):
+            options = []
+            default_value = None
+            
+            for option in select.find_all('option'):
+                option_text = self.clean_text(option.get_text())
+                if option_text and option_text != "Unknown":
+                    options.append(option_text)
+                    if option.has_attr('selected'):
+                        default_value = option_text
+            
+            if options:
+                label = self.find_comprehensive_label(select, soup)
+                
+                # Create meaningful variable name from label or options
+                var_name = None
+                if label and label != "Unknown":
+                    var_name = self.create_meaningful_variable_name(label)
+                
+                # If no meaningful name from label, try to create from options
+                if not var_name:
+                    var_name = self.create_meaningful_variable_name_from_options(options)
+                
+                # Last resort: use generic name with counter to avoid conflicts
+                if not var_name:
+                    dropdown_count = len([v for v in variables if v.name.startswith('select_option')]) + 1
+                    var_name = f"select_option_{dropdown_count}"
+                
+                # Ensure uniqueness within this extraction
+                existing_names = [v.name for v in variables]
+                if var_name in existing_names:
+                    counter = 1
+                    base_name = var_name
+                    while f"{base_name}_{counter}" in existing_names:
+                        counter += 1
+                    var_name = f"{base_name}_{counter}"
+                
+                variables.append(ElementVariable(
+                    name=var_name,
+                    variable_type='SELECT',
+                    options=options,
+                    default_value=default_value or options[0],
+                    is_required=True,
+                    description=self.clean_text(label) if label != "Unknown" else f"Selección desplegable"
+                ))
+                print(f"  ✓ Found dropdown variable: {var_name} with {len(options)} options")
+        
+        return variables
+    
+    def extract_table_variables(self, soup: BeautifulSoup) -> List[ElementVariable]:
+        """Extract variables from table structures with options"""
+        variables = []
+        
+        for table in soup.find_all('table'):
+            rows = table.find_all('tr')
+            
+            for row in rows:
+                cells = row.find_all(['td', 'th'])
+                if len(cells) >= 2:
+                    label_cell = cells[0]
+                    value_cell = cells[1]
+                    
+                    label_text = self.clean_text(label_cell.get_text())
+                    
+                    # Look for radio buttons in value cell
+                    radios = value_cell.find_all('input', type='radio')
+                    if len(radios) > 1:
+                        options = []
+                        default_value = None
+                        
+                        for radio in radios:
+                            radio_label = self.find_comprehensive_label(radio, soup)
+                            if radio_label != "Unknown":
+                                options.append(radio_label)
+                                if radio.has_attr('checked'):
+                                    default_value = radio_label
+                        
+                        if options:
+                            var_name = self.create_meaningful_variable_name(label_text)
+                            if var_name:
+                                variables.append(ElementVariable(
+                                    name=var_name,
+                                    variable_type='RADIO',
+                                    options=options,
+                                    default_value=default_value or options[0],
+                                    is_required=True,
+                                    description=label_text
+                                ))
+                                print(f"  ✓ Found table variable: {var_name} with {len(options)} options")
+                    
+                    # Look for select dropdown in value cell
+                    selects = value_cell.find_all('select')
+                    for select in selects:
+                        options = []
+                        for option in select.find_all('option'):
+                            option_text = self.clean_text(option.get_text())
+                            if option_text:
+                                options.append(option_text)
+                        
+                        if options:
+                            var_name = self.create_meaningful_variable_name(label_text)
+                            if var_name:
+                                variables.append(ElementVariable(
+                                    name=var_name,
+                                    variable_type='SELECT',
+                                    options=options,
+                                    default_value=options[0],
+                                    is_required=True,
+                                    description=label_text
+                                ))
+                                print(f"  ✓ Found table dropdown: {var_name} with {len(options)} options")
+        
+        return variables
+    
+    def create_meaningful_variable_name_from_options(self, options: List[str]) -> str:
+        """Create variable name from the options available"""
+        if not options:
+            return None
+        
+        # Analyze options to determine what they represent
+        options_text = ' '.join(options).lower()
+        
+        # Common choice patterns
+        choice_patterns = {
+            'prelacado': ['sin prelacado', 'con prelacado', 'prelacado'],
+            'ubicacion': ['interior', 'exterior'],
+            'acabado_superficie': ['galvanizado', 'sin galvanizar', 'zinc', 'aluminio'],
+            'tipo_acabado': ['liso', 'rugoso', 'texturizado', 'brillante', 'mate'],
+            'sistema_encofrado': ['recuperable', 'perdido', 'encofrado'],
+            'tipo_material': ['metalico', 'madera', 'hormigon', 'acero'],
+            'tratamiento': ['tratado', 'sin tratar', 'imprimado'],
+            'conexion': ['soldado', 'atornillado', 'pegado'],
+            'orientacion': ['vertical', 'horizontal', 'inclinado']
+        }
+        
+        for var_name, keywords in choice_patterns.items():
+            if any(keyword in options_text for keyword in keywords):
+                return var_name
+        
+        # Create generic meaningful name
+        first_option = options[0].lower()
+        cleaned = re.sub(r'[^\w\s]', '', first_option)
+        cleaned = re.sub(r'\s+', '_', cleaned.strip())
+        
+        if len(cleaned) > 25:
+            cleaned = cleaned[:25]
+        
+        return f"tipo_{cleaned}" if cleaned else None
+    
+    def find_nearby_inputs(self, element, soup, max_distance=3):
+        """Find input elements near a given element"""
+        inputs = []
+        
+        # Look in the same container
+        container = element.find_parent(['div', 'td', 'tr', 'section', 'form']) or element
+        inputs.extend(container.find_all('input', type='text'))
+        
+        # Look in sibling elements
+        current = element
+        for _ in range(max_distance):
+            if hasattr(current, 'next_sibling') and current.next_sibling:
+                current = current.next_sibling
+                if hasattr(current, 'find_all'):
+                    inputs.extend(current.find_all('input', type='text'))
+        
+        # Look in parent's siblings
+        parent = element.parent
+        if parent:
+            for sibling in parent.find_next_siblings():
+                inputs.extend(sibling.find_all('input', type='text'))
+                if len(inputs) > 10:  # Prevent too many matches
+                    break
+        
+        return inputs[:5]  # Limit to first 5 matches
+    
+    def extract_variables_from_form_elements(self, opciones_section, soup) -> List[ElementVariable]:
+        """Extract variables from form elements in Opciones section"""
+        variables = []
+        
+        # Look for form elements in the Opciones section
+        container = opciones_section.find_parent() if opciones_section.find_parent() else opciones_section
+        
+        # Find all input elements in the section
+        inputs = container.find_all(['input', 'select', 'textarea'])
+        
+        # Process numeric inputs with labels
+        for inp in inputs:
+            if inp.get('type') == 'text':
+                value = inp.get('value', '')
+                if value and self.is_numeric_value(value):
+                    # Extract meaningful variable name from label
+                    label_text = self.find_comprehensive_label(inp, soup)
+                    var_name = self.create_meaningful_variable_name(label_text)
+                    
+                    # Skip if we already found this variable via units
+                    if var_name and not any(v.name == var_name for v in variables):
+                        variables.append(ElementVariable(
+                            name=var_name,
+                            variable_type='NUMERIC',
+                            options=[],
+                            default_value=value,
+                            is_required=True,
+                            description=self.clean_text(label_text)
+                        ))
+        
+        # Process radio button groups
+        radio_names = set()
+        for inp in inputs:
+            if inp.get('type') == 'radio':
+                name = inp.get('name')
+                if name and name not in radio_names:
+                    radio_names.add(name)
+                    options = []
+                    default_value = None
+                    
+                    # Get all radio buttons with this name
+                    radios = container.find_all('input', {'name': name, 'type': 'radio'})
+                    for radio in radios:
+                        label = self.find_comprehensive_label(radio, soup)
+                        if label:
+                            options.append(label)
+                            if radio.get('checked'):
+                                default_value = label
+                    
+                    if options:
+                        var_name = self.create_meaningful_variable_name(name) or name
+                        variables.append(ElementVariable(
+                            name=var_name,
+                            variable_type='RADIO',
+                            options=options,
+                            default_value=default_value or options[0],
+                            is_required=True,
+                            description=f"Selección para {name}"
+                        ))
+        
+        return variables
+    
+    def find_opciones_section(self, soup: BeautifulSoup):
+        """Find the 'Opciones' section in the HTML"""
+        # Look for headings or text containing "Opciones"
+        opciones_indicators = [
+            soup.find('h1', string=lambda text: text and 'opciones' in text.lower()),
+            soup.find('h2', string=lambda text: text and 'opciones' in text.lower()),
+            soup.find('h3', string=lambda text: text and 'opciones' in text.lower()),
+            soup.find('h4', string=lambda text: text and 'opciones' in text.lower()),
+            soup.find(string=lambda text: text and 'opciones' in text.lower().strip())
+        ]
+        
+        for indicator in opciones_indicators:
+            if indicator:
+                return indicator
+        
+        return None
+    
+    def find_comprehensive_label(self, inp, soup):
+        """Find label using multiple strategies"""
+        # Strategy 1: Direct label element
+        input_id = inp.get('id')
+        if input_id:
+            label = soup.find('label', {'for': input_id})
+            if label:
+                return self.clean_text(label.get_text())
+        
+        # Strategy 2: Parent label
+        parent = inp.parent
+        if parent and parent.name == 'label':
+            return self.clean_text(parent.get_text())
+        
+        # Strategy 3: Table cell structure  
+        td_parent = inp.find_parent('td')
+        if td_parent:
+            row = td_parent.find_parent('tr')
+            if row:
+                cells = row.find_all(['td', 'th'])
+                for i, cell in enumerate(cells):
+                    if inp in cell.find_all(['input', 'select', 'textarea']):
+                        # Look for label in previous cells
+                        if i > 0:
+                            return self.clean_text(cells[i-1].get_text())
+        
+        # Strategy 4: Preceding text
+        prev_sibling = inp.previous_sibling
+        while prev_sibling:
+            if hasattr(prev_sibling, 'get_text'):
+                text = self.clean_text(prev_sibling.get_text())
+                if text and len(text) < 200:
+                    return text
+            elif hasattr(prev_sibling, 'strip'):
+                text = prev_sibling.strip()
+                if text and len(text) < 200:
+                    return text
+            prev_sibling = prev_sibling.previous_sibling
+        
+        return "Unknown"
+    
+    def create_meaningful_variable_name(self, label_text: str) -> str:
+        """Convert label text to meaningful variable name with proper encoding"""
+        if not label_text or label_text == "Unknown":
+            return None
+        
+        # First, fix encoding issues
+        text = self.fix_encoding_and_clean(label_text)
+        text = text.lower()
+        
+        # Specific mappings for Spanish construction terms
+        mappings = {
+            # Steel/concrete
+            'cuantía de acero para momentos negativos': 'cuantia_acero_negativos',
+            'cuantía de acero para momentos positivos': 'cuantia_acero_positivos',
+            'acero negativos': 'cuantia_acero_negativos',
+            'acero positivos': 'cuantia_acero_positivos',
+            'volumen de hormigón': 'volumen_hormigon',
+            'canto de la losa': 'canto_losa',
+            'altura del perfil': 'altura_perfil',
+            'intereje': 'intereje',
+            'espesor': 'espesor',
+            
+            # Rendimiento/Performance with units
+            'rendimiento (l/m²)': 'rendimiento_l_m2',
+            'rendimiento': 'rendimiento',
+            
+            # Puntales/Props with units
+            'número de puntales (ud/m²)': 'numero_puntales_ud_m2',
+            'puntales (ud/m²)': 'numero_puntales_ud_m2',
+            'número de puntales': 'numero_puntales',
+            'puntales': 'numero_puntales',
+            
+            # Encofrado
+            'sistema de encofrado': 'sistema_encofrado',
+            'tipo de encofrado': 'tipo_encofrado',
+            'número de usos': 'numero_usos',
+            'desencofrante': 'agente_desencofrante',
+            
+            # General
+            'altura': 'altura',
+            'ancho': 'ancho',
+            'largo': 'largo',
+            'dimensión': 'dimension',
+            'material': 'material',
+            'acabado': 'tipo_acabado',
+            'prelacado': 'prelacado'
+        }
+        
+        # Check for direct matches
+        for spanish_term, var_name in mappings.items():
+            if spanish_term in text:
+                return var_name
+        
+        # Create generic but meaningful name
+        # Remove units and parentheses, clean up encoding
+        cleaned = re.sub(r'\([^)]*\)', '', text)  # Remove units in parentheses
+        cleaned = re.sub(r'[^\w\s]', '', cleaned)  # Remove special chars
+        cleaned = re.sub(r'\s+', '_', cleaned.strip())  # Snake case
+        
+        # Limit length
+        if len(cleaned) > 30:
+            cleaned = cleaned[:30]
+        
+        return cleaned if cleaned else None
+    
+    def fix_encoding_and_clean(self, text: str) -> str:
+        """Fix encoding issues and create clean variable names"""
+        if not text:
+            return ""
+        
+        # Fix common encoding issues
+        encoding_fixes = {
+            'Â²': '²',  # Fix squared symbol
+            'Â³': '³',  # Fix cubed symbol  
+            'â²': '²',
+            'â³': '³',
+            'mÂ²': 'm²',
+            'mÂ³': 'm³',
+            'l/mÂ²': 'l/m²',
+            'ud/mÂ²': 'ud/m²',
+            'kg/mÂ²': 'kg/m²',
+            # Spanish character fixes
+            'Ã¡': 'á',  # á character
+            'Ã©': 'é',  # é character
+            'Ã­': 'í',  # í character
+            'Ã³': 'ó',  # ó character
+            'Ãº': 'ú',  # ú character
+            'Ã±': 'ñ',  # ñ character
+            'cuantãa': 'cuantía',  # fix cuantía
+            'teã³rico': 'teórico',  # fix teórico
+            'diãmetro': 'diámetro',  # fix diámetro
+        }
+        
+        for bad, good in encoding_fixes.items():
+            text = text.replace(bad, good)
+        
+        return text
+    
+    def is_numeric_value(self, value: str) -> bool:
+        """Check if a value is numeric"""
+        if not value:
+            return False
+        
+        # Handle Spanish decimal format
+        value = value.replace(',', '.')
+        
+        try:
+            float(value)
+            return True
+        except ValueError:
+            return False
     
     def extract_price(self, soup: BeautifulSoup) -> Optional[float]:
         """Extract price from CYPE page tables and elements"""
@@ -488,8 +1181,8 @@ class EnhancedElementExtractor:
             description = self.extract_description(soup)
             print(f"  ✓ Description: {description[:60]}...")
             
-            # Extract enhanced variables
-            variables = self.extract_variables_enhanced(soup, text)
+            # Extract enhanced variables using new 4-strategy approach
+            variables = self.extract_variables_from_opciones_section(soup)
             
             element_data = ElementData(
                 code=code,

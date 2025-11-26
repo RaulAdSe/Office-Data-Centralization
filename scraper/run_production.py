@@ -123,14 +123,28 @@ def extract_element_content(urls, max_elements):
                 # Check content quality
                 desc = element_data.description
                 if len(desc) > 100 and 'EA Acero' not in desc:  # Avoid navigation content
+                    # Convert ElementVariable objects to dictionaries for storage
+                    variables_list = []
+                    if hasattr(element_data, 'variables') and element_data.variables:
+                        for var in element_data.variables:
+                            variables_list.append({
+                                'name': var.name,
+                                'variable_type': var.variable_type,
+                                'options': var.options,
+                                'default_value': var.default_value,
+                                'is_required': var.is_required,
+                                'description': var.description
+                            })
+                    
                     extracted_elements.append({
                         'element_code': getattr(element_data, 'code', f'ELEM_{i+1}'),
                         'title': getattr(element_data, 'title', 'Unknown Element'),
                         'description': desc,
                         'price': getattr(element_data, 'price', None),
-                        'url': url
+                        'url': url,
+                        'variables': variables_list  # Include extracted variables!
                     })
-                    print(f"     ✅ Valid content: {len(desc)} chars")
+                    print(f"     ✅ Valid content: {len(desc)} chars, {len(variables_list)} variables")
                 else:
                     print(f"     ❌ Poor content quality")
             else:
@@ -164,7 +178,8 @@ def generate_templates(elements):
             'title': elem['title'],
             'description': elem['description'],
             'price': elem['price'],
-            'url': elem['url']
+            'url': elem['url'],
+            'variables': elem.get('variables', [])  # Include enhanced variables!
         }
         enhanced_elements.append(enhanced_element)
     
@@ -256,11 +271,11 @@ def store_templates(templates, db_manager):
             # Store template variable mappings for placeholders
             if template.get('placeholders'):
                 with db_manager.get_connection() as conn:
-                    for placeholder in template['placeholders']:
+                    for position, placeholder in enumerate(template['placeholders']):
                         try:
                             conn.execute(
                                 "INSERT INTO template_variable_mappings (version_id, placeholder, variable_id, position) VALUES (?, ?, (SELECT variable_id FROM element_variables WHERE element_id = ? AND variable_name = ?), ?)",
-                                (version_id, '{' + placeholder + '}', element_id, placeholder, len(template.get('placeholders', [])))
+                                (version_id, '{' + placeholder + '}', element_id, placeholder, position)
                             )
                         except Exception as pe:
                             print(f"     Warning: Could not store placeholder {placeholder}: {pe}")

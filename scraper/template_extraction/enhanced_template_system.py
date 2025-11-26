@@ -474,13 +474,52 @@ class EnhancedTemplateSystem:
         return templates
     
     def create_dynamic_from_single_element(self, element):
-        """Create dynamic template from single element using extracted variables"""
+        """Create dynamic template from single element using extracted enhanced variables"""
         
         print(f"     🔍 Analyzing single element for dynamic patterns...")
         
         description = element['description']
         
-        # Extract dynamic patterns from description text
+        # Check if we have enhanced variables from extraction
+        if 'variables' in element and element['variables']:
+            print(f"     🎯 Using extracted enhanced variables: {len(element['variables'])} variables")
+            
+            # Use the enhanced variables we extracted!
+            template = description
+            placeholders = []
+            variables = []
+            
+            # Convert extracted variables to template format
+            for var in element['variables']:
+                var_name = var['name']
+                placeholder_name = f"{{{var_name}}}"
+                placeholders.append(var_name)
+                
+                variables.append({
+                    'name': var_name,
+                    'type': var.get('variable_type', 'TEXT'),
+                    'options': var.get('options', []),
+                    'default_value': var.get('default_value', ''),
+                    'is_required': var.get('is_required', True),
+                    'description': var.get('description', '')
+                })
+                
+                # Advanced semantic placeholder insertion
+                template = self.insert_semantic_placeholder(template, var, placeholder_name.strip('{}'))
+                    
+            return {
+                'element_code': element['element_code'],
+                'title': element['title'],
+                'template': template,
+                'template_type': 'dynamic_enhanced_single',
+                'placeholders': placeholders,
+                'variables': variables,
+                'price': element['price'],
+                'source_urls': [element['url']]
+            }
+        
+        # Fallback to old pattern extraction if no enhanced variables
+        print(f"     ⚠ No enhanced variables found, using pattern extraction")
         dynamic_patterns = self.extract_dynamic_patterns(description)
         
         if not dynamic_patterns:
@@ -570,11 +609,56 @@ class EnhancedTemplateSystem:
         return patterns
     
     def create_enhanced_dynamic_template(self, element_code, variations):
-        """Create enhanced dynamic template with better placeholder detection"""
+        """Create enhanced dynamic template using differential analysis of variations"""
         
         descriptions = [v['description'] for v in variations]
         
-        # Enhanced difference detection
+        # Check if we have multiple variations for differential analysis
+        if len(variations) > 1:
+            print(f"     🔬 Performing differential analysis on {len(variations)} variations")
+            return self.create_template_from_differential_analysis(element_code, variations)
+        
+        # Single variation - use enhanced variables from extraction
+        first_variation = variations[0]
+        if 'variables' in first_variation and first_variation['variables']:
+            print(f"     🎯 Using extracted enhanced variables: {len(first_variation['variables'])} variables")
+            
+            # Use the enhanced variables we extracted!
+            base_template = descriptions[0]
+            placeholders = []
+            variables = []
+            
+            # Convert extracted variables to template format
+            for var in first_variation['variables']:
+                var_name = var['name']
+                placeholder_name = f"{{{var_name}}}"
+                placeholders.append(var_name)
+                
+                variables.append({
+                    'name': var_name,
+                    'type': var.get('variable_type', 'TEXT'),
+                    'options': var.get('options', []),
+                    'default_value': var.get('default_value', ''),
+                    'is_required': var.get('is_required', True),
+                    'description': var.get('description', '')
+                })
+                
+                # Advanced semantic placeholder insertion
+                base_template = self.insert_semantic_placeholder(base_template, var, placeholder_name.strip('{}'))
+            
+            return {
+                'element_code': element_code,
+                'title': first_variation['title'],
+                'template': base_template,
+                'template_type': 'dynamic_enhanced',
+                'placeholders': placeholders,
+                'variables': variables,
+                'price': first_variation['price'],  # Base price from first variation
+                'source_urls': [v['url'] for v in variations]
+            }
+        
+        # Fallback to old difference detection if no enhanced variables
+        print(f"     ⚠ No enhanced variables found, using difference detection")
         differences = self.find_enhanced_differences(descriptions)
         
         if not differences:
@@ -975,11 +1059,18 @@ class EnhancedTemplateSystem:
             except Exception as e:
                 print(f"       ❌ Variable {var['name']}: {e}")
         
-        # Create template mappings
-        print(f"     🔧 Creating {len(template['placeholders'])} placeholder mappings...")
+        # Create template mappings (remove duplicates to prevent constraint violations)
+        unique_placeholders = []
+        seen = set()
+        for placeholder in template['placeholders']:
+            if placeholder not in seen:
+                unique_placeholders.append(placeholder)
+                seen.add(placeholder)
+        
+        print(f"     🔧 Creating {len(unique_placeholders)} unique placeholder mappings...")
         
         with self.db_manager.get_connection() as conn:
-            for i, placeholder in enumerate(template['placeholders']):
+            for i, placeholder in enumerate(unique_placeholders):
                 if placeholder in variable_map:
                     try:
                         conn.execute(
@@ -992,8 +1083,328 @@ class EnhancedTemplateSystem:
                 else:
                     print(f"       ❌ No variable found for placeholder {placeholder}")
         
-        print(f"     📊 Variable mapping complete: {len(variable_map)} variables, {len(template['placeholders'])} placeholders")
+        print(f"     📊 Variable mapping complete: {len(variable_map)} variables, {len(unique_placeholders)} placeholders")
     
+    def insert_semantic_placeholder(self, template: str, var: dict, placeholder: str) -> str:
+        """Advanced logic to insert semantic placeholders based on variable meaning"""
+        import re
+        
+        var_name = var.get('name', '')
+        var_type = var.get('type', var.get('variable_type', ''))
+        default_val = var.get('default_value', '')
+        
+        # Strategy 1: Direct value replacement (for numeric variables)
+        if var_type == 'NUMERIC' and default_val:
+            clean_val = re.sub(r'\s*\([^)]+\)$', '', default_val.strip())
+            patterns = [
+                rf'\b{re.escape(clean_val)}\b',  # Word boundary
+                rf'{re.escape(clean_val)}(?=\s+cm\b)',  # Before cm
+                rf'{re.escape(clean_val)}(?=\s+mm\b)',  # Before mm
+                rf'{re.escape(clean_val)}(?=\s+m\b)',   # Before m
+                rf'{re.escape(clean_val)}(?=\s+%\b)',   # Before %
+                rf'{re.escape(clean_val)}(?=\s+kg)',    # Before kg
+            ]
+            
+            for pattern in patterns:
+                if re.search(pattern, template):
+                    template = re.sub(pattern, f'{{{placeholder}}}', template, count=1)
+                    print(f"       ✅ Inserted numeric placeholder: {{{placeholder}}}")
+                    return template
+        
+        # Strategy 2: Semantic insertion based on variable meaning
+        semantic_insertions = self.get_semantic_insertion_points(var_name, template)
+        
+        for insertion in semantic_insertions:
+            if insertion['pattern'] and re.search(insertion['pattern'], template):
+                # Clean placeholder to avoid nested braces
+                clean_placeholder = placeholder.strip('{}')
+                template = re.sub(
+                    insertion['pattern'], 
+                    insertion['replacement'].format(placeholder=f'{{{clean_placeholder}}}'),
+                    template, 
+                    count=1
+                )
+                print(f"       ✅ Inserted semantic placeholder: {{{clean_placeholder}}} -> {insertion['context']}")
+                return template
+        
+        # Strategy 3: Advanced contextual insertion for CYPE construction terms
+        replacements_made = []
+        
+        # Clean the placeholder to avoid nested braces
+        clean_placeholder = placeholder.strip('{}')
+        
+        # Material type replacements - fix the broken "tipo_material" without braces
+        if 'tipo_material' in var_name:
+            # Fix existing broken insertions
+            if 'tipo_material UNE-EN' in template:
+                template = template.replace('tipo_material UNE-EN', f'{{{clean_placeholder}}} UNE-EN')
+                replacements_made.append(f"Fixed material reference: {{{clean_placeholder}}}")
+            elif 'acero UNE-EN' in template:
+                template = template.replace('acero UNE-EN', f'acero {{{clean_placeholder}}} UNE-EN')
+                replacements_made.append(f"Enhanced material specification: {{{clean_placeholder}}}")
+        
+        # Sistema encofrado replacements - fix the broken "sistema_encofrado" without braces  
+        if 'sistema_encofrado' in var_name:
+            # Only replace if it's NOT already a placeholder
+            if 'sistema_encofrado' in template and f'{{{clean_placeholder}}}' not in template:
+                template = template.replace('sistema_encofrado', f'{{{clean_placeholder}}}')
+                replacements_made.append(f"Fixed formwork system reference: {{{clean_placeholder}}}")
+            elif 'sistema de encofrado' in template and f'{{{clean_placeholder}}}' not in template:
+                template = template.replace('sistema de encofrado', f'{{{clean_placeholder}}}')
+                replacements_made.append(f"Enhanced formwork system: {{{clean_placeholder}}}")
+        
+        # Barniz type replacements
+        if 'tipo_rmb' in var_name or 'barniz' in var_name:
+            if 'barniz sintético' in template:
+                template = template.replace('barniz sintético', f'{{{clean_placeholder}}}')
+                replacements_made.append(f"Enhanced varnish type: {{{clean_placeholder}}}")
+            elif 'barniz al agua' in template:
+                template = template.replace('barniz al agua', f'{{{clean_placeholder}}}')
+                replacements_made.append(f"Enhanced water-based varnish: {{{clean_placeholder}}}")
+        
+        # Print results
+        for replacement in replacements_made:
+            print(f"       ✅ Contextual replacement: {replacement}")
+            return template
+        
+        # Strategy 4: Smart fallback - only for important variables
+        clean_placeholder = placeholder.strip('{}')
+        if var_type in ['SELECT', 'RADIO'] and not re.search(rf'{{{re.escape(clean_placeholder)}}}', template):
+            # Only add fallback for primary variables (not numbered variants)
+            if not re.search(r'_\d+$', var_name):  # Skip variables ending with numbers like ubicacion_1
+                # Insert at the end with descriptive context
+                context_map = {
+                    'ubicacion': 'ubicación',
+                    'tipo_material': 'tipo de material', 
+                    'tipo_eae': 'categoría EAE',
+                    'tipo_ehe': 'categoría EHE',
+                    'tipo_rmb': 'tipo de barniz',
+                    'sistema_encofrado': 'sistema de encofrado'
+                }
+                
+                context = next((v for k, v in context_map.items() if k in var_name), None)
+                if context:  # Only add fallback for recognized important variables
+                    template = template.rstrip('.') + f' ({context}: {{{clean_placeholder}}}).'
+                    print(f"       ✅ Inserted fallback placeholder: {{{clean_placeholder}}} -> {context}")
+                else:
+                    print(f"       ⚠ Skipped fallback for secondary variable: {clean_placeholder}")
+            else:
+                print(f"       ⚠ Skipped numbered variant: {clean_placeholder}")
+        
+        # Final cleanup: Fix any double braces that might have been created
+        import re
+        template = re.sub(r'\{\{([^}]+)\}\}', r'{\1}', template)
+        
+        return template
+    
+    def get_semantic_insertion_points(self, var_name: str, template: str) -> list:
+        """Get semantic insertion points based on variable name and template content"""
+        insertions = []
+        
+        # Define semantic patterns for different variable types
+        if 'ubicacion' in var_name:
+            insertions.append({
+                'pattern': r'\ben estructura de',
+                'replacement': 'en estructura de {placeholder} para',
+                'context': 'location context'
+            })
+        
+        if 'material' in var_name:
+            insertions.append({
+                'pattern': r'\bacero UNE-EN',
+                'replacement': 'acero {placeholder} UNE-EN',
+                'context': 'material specification'
+            })
+        
+        if 'encofrado' in var_name:
+            insertions.append({
+                'pattern': r'\bsistema de encofrado',
+                'replacement': '{placeholder}',
+                'context': 'formwork system'
+            })
+            
+        return insertions
+    
+    def create_template_from_differential_analysis(self, element_code, variations):
+        """Create template by analyzing differences between element variations"""
+        import difflib
+        
+        # Use first variation as base
+        base_variation = variations[0]
+        base_description = base_variation['description']
+        base_variables = base_variation.get('variables', [])
+        
+        print(f"     📊 Base variation: {len(base_description)} chars")
+        print(f"     🔍 Analyzing differences with {len(variations)-1} other variations")
+        
+        # Find all text differences between variations
+        differences = []
+        variable_mappings = {}
+        
+        for i, variation in enumerate(variations[1:], 1):
+            var_description = variation['description']
+            var_variables = variation.get('variables', [])
+            
+            # Find text differences
+            diff = self.find_text_differences(base_description, var_description)
+            
+            # Map differences to variable changes
+            var_changes = self.find_variable_changes(base_variables, var_variables)
+            
+            print(f"     📝 Variation {i}: {len(diff)} text differences, {len(var_changes)} variable changes")
+            
+            # Correlate text differences with variable changes
+            for text_diff in diff:
+                for var_change in var_changes:
+                    # If variable change might explain text difference
+                    if self.could_variable_cause_difference(var_change, text_diff):
+                        key = var_change['variable_name']
+                        if key not in variable_mappings:
+                            variable_mappings[key] = []
+                        variable_mappings[key].append({
+                            'position': text_diff['position'],
+                            'old_text': text_diff['old_text'],
+                            'new_text': text_diff['new_text'],
+                            'variable_value': var_change['new_value']
+                        })
+        
+        # Create template with placeholders at exact difference positions
+        template = base_description
+        placeholders = []
+        variables = []
+        
+        # Sort mappings by position (reverse order to avoid position shifts)
+        sorted_mappings = []
+        for var_name, diffs in variable_mappings.items():
+            for diff in diffs:
+                sorted_mappings.append({
+                    'variable': var_name,
+                    'position': diff['position'],
+                    'old_text': diff['old_text'],
+                    'new_text': diff['new_text']
+                })
+        
+        sorted_mappings.sort(key=lambda x: x['position'], reverse=True)
+        
+        # Apply replacements
+        for mapping in sorted_mappings:
+            var_name = mapping['variable']
+            position = mapping['position']
+            old_text = mapping['old_text']
+            
+            # Replace old text with placeholder
+            if old_text in template:
+                template = template.replace(old_text, f'{{{var_name}}}', 1)
+                if var_name not in placeholders:
+                    placeholders.append(var_name)
+                    print(f"       ✅ Mapped difference to placeholder: {{{var_name}}} at '{old_text}'")
+        
+        # Create variables list from base variation
+        for var in base_variables:
+            variables.append({
+                'name': var['name'],
+                'type': var.get('variable_type', 'TEXT'),
+                'options': var.get('options', []),
+                'default_value': var.get('default_value', ''),
+                'is_required': var.get('is_required', True),
+                'description': var.get('description', '')
+            })
+        
+        return {
+            'element_code': element_code,
+            'title': base_variation['title'],
+            'template': template,
+            'template_type': 'dynamic_differential',
+            'placeholders': placeholders,
+            'variables': variables,
+            'price': base_variation['price'],  # Base price only
+            'source_urls': [v['url'] for v in variations],
+            'analysis_metadata': {
+                'variations_analyzed': len(variations),
+                'differences_found': len(variable_mappings),
+                'placeholders_created': len(placeholders)
+            }
+        }
+    
+    def find_text_differences(self, text1, text2):
+        """Find specific text differences between two descriptions"""
+        import difflib
+        
+        differences = []
+        matcher = difflib.SequenceMatcher(None, text1, text2)
+        
+        for tag, i1, i2, j1, j2 in matcher.get_opcodes():
+            if tag == 'replace':
+                differences.append({
+                    'position': i1,
+                    'old_text': text1[i1:i2],
+                    'new_text': text2[j1:j2],
+                    'type': 'replace'
+                })
+            elif tag == 'delete':
+                differences.append({
+                    'position': i1,
+                    'old_text': text1[i1:i2],
+                    'new_text': '',
+                    'type': 'delete'
+                })
+            elif tag == 'insert':
+                differences.append({
+                    'position': i1,
+                    'old_text': '',
+                    'new_text': text2[j1:j2],
+                    'type': 'insert'
+                })
+        
+        return differences
+    
+    def find_variable_changes(self, base_vars, comp_vars):
+        """Find which variables changed between two variations"""
+        changes = []
+        
+        # Create lookup for base variables
+        base_lookup = {var['name']: var.get('default_value', '') for var in base_vars}
+        comp_lookup = {var['name']: var.get('default_value', '') for var in comp_vars}
+        
+        # Find changes
+        for var_name in base_lookup:
+            if var_name in comp_lookup:
+                base_val = base_lookup[var_name]
+                comp_val = comp_lookup[var_name]
+                if base_val != comp_val:
+                    changes.append({
+                        'variable_name': var_name,
+                        'old_value': base_val,
+                        'new_value': comp_val
+                    })
+        
+        return changes
+    
+    def could_variable_cause_difference(self, var_change, text_diff):
+        """Determine if a variable change could explain a text difference"""
+        
+        # Simple heuristics to correlate variable changes with text differences
+        old_val = var_change['old_value']
+        new_val = var_change['new_value']
+        old_text = text_diff['old_text']
+        new_text = text_diff['new_text']
+        
+        # Direct value match
+        if old_val in old_text or new_val in new_text:
+            return True
+        
+        # Numeric correlation (for dimensions, quantities)
+        if old_val.replace('.', '').replace(',', '').isdigit() and new_val.replace('.', '').replace(',', '').isdigit():
+            if old_val in old_text or new_val in new_text:
+                return True
+        
+        # Semantic correlation (for material types, categories)
+        if any(keyword in old_text.lower() or keyword in new_text.lower() 
+               for keyword in ['material', 'tipo', 'categoria', 'ubicacion']):
+            return True
+        
+        return False
+
     def find_height_differences(self, descriptions):
         """Find height/depth differences"""
         
