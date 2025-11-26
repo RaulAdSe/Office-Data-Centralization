@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Office Variable System{% endblock %}</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1, h2, h3 { color: #333; }
+        .nav {
+            background: #007acc;
+            padding: 15px;
+            margin: -30px -30px 30px -30px;
+            border-radius: 10px 10px 0 0;
+        }
+        .nav a {
+            color: white;
+            text-decoration: none;
+            margin-right: 20px;
+            font-weight: 500;
+        }
+        .nav a:hover { text-decoration: underline; }
+        .btn {
+            background: #007acc;
+            color: white;
+            padding: 10px 20px;
+            text-decoration: none;
+            border-radius: 5px;
+            border: none;
+            cursor: pointer;
+            display: inline-block;
+            margin: 5px;
+        }
+        .btn:hover { background: #005999; }
+        .element-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+        }
+        .element-card {
+            border: 1px solid #ddd;
+            padding: 20px;
+            border-radius: 8px;
+            background: #f9f9f9;
+        }
+        .element-code { font-family: monospace; color: #666; font-size: 0.9em; }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+        }
+        .form-group input, .form-group select, .form-group textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            box-sizing: border-box;
+        }
+        .template {
+            background: #f8f8f8;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 15px 0;
+            font-family: monospace;
+            font-size: 0.9em;
+            border-left: 4px solid #007acc;
+        }
+        .rendered {
+            background: #e8f5e8;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 15px 0;
+            border-left: 4px solid #28a745;
+        }
+        .variable-list {
+            list-style: none;
+            padding: 0;
+        }
+        .variable-list li {
+            background: #f0f0f0;
+            margin: 5px 0;
+            padding: 10px;
+            border-radius: 5px;
+            display: flex;
+            justify-content: space-between;
+        }
+        .required { color: #dc3545; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="nav">
+            <a href="/">Elements</a>
+            <a href="/projects">Projects</a>
+            <a href="/create_project">New Project</a>
+        </div>
+        
+        {% block content %}{% endblock %}
+    </div>
+</body>
+</html>

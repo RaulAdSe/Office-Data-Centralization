@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+
+{% block title %}{{ project[2] }} - Office Variable System{% endblock %}
+
+{% block content %}
+<h1>{{ project[2] }}</h1>
+<div class="element-code">{{ project[1] }}</div>
+<p><strong>Status:</strong> {{ project[3] }}</p>
+{% if project[6] %}
+<p><strong>Location:</strong> {{ project[6] }}</p>
+{% endif %}
+<p><strong>Created:</strong> {{ project[7] }}</p>
+
+<a href="/add_element_to_project/{{ project[0] }}" class="btn">+ Add Element</a>
+
+<h2>Project Elements</h2>
+{% if project_elements %}
+    {% for pe in project_elements %}
+    <div class="element-card" style="margin-bottom: 30px;">
+        <h3>{{ pe.instance_code }} - {{ pe.instance_name }}</h3>
+        <div class="element-code">{{ pe.element_code }}</div>
+        
+        <h4>Variables & Values:</h4>
+        {% if pe.values %}
+        <ul class="variable-list">
+            {% for var_name, value in pe.values.items() %}
+            <li>
+                <span><strong>{{ var_name }}:</strong> {{ value }}</span>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p><em>No values set yet.</em></p>
+        {% endif %}
+        
+        <h4>Rendered Description:</h4>
+        <div class="rendered">{{ pe.rendered_description }}</div>
+        
+        <a href="/edit_values/{{ pe.project_element_id }}" class="btn">Edit Values</a>
+    </div>
+    {% endfor %}
+{% else %}
+<p>No elements in this project yet. <a href="/add_element_to_project/{{ project[0] }}">Add your first element</a>.</p>
+{% endif %}
+
+<a href="/projects" class="btn">← Back to Projects</a>
+{% endblock %}

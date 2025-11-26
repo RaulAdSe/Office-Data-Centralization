@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+
+{% block title %}Create Project - Office Variable System{% endblock %}
+
+{% block content %}
+<h1>Create New Project</h1>
+
+<form method="POST">
+    <div class="form-group">
+        <label for="project_code">Project Code:</label>
+        <input type="text" id="project_code" name="project_code" required placeholder="e.g., OFFICE-2024-001">
+    </div>
+    
+    <div class="form-group">
+        <label for="project_name">Project Name:</label>
+        <input type="text" id="project_name" name="project_name" required placeholder="e.g., Barcelona Office Building">
+    </div>
+    
+    <div class="form-group">
+        <label for="location">Location (optional):</label>
+        <input type="text" id="location" name="location" placeholder="e.g., Barcelona, Spain">
+    </div>
+    
+    <button type="submit" class="btn">Create Project</button>
+    <a href="/projects" class="btn" style="background: #666;">Cancel</a>
+</form>
+{% endblock %}

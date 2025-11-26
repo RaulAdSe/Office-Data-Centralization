@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+
+{% block title %}{{ element.element_name }} - Office Variable System{% endblock %}
+
+{% block content %}
+<h1>{{ element.element_name }}</h1>
+<div class="element-code">{{ element.element_code }}</div>
+{% if element.price %}
+<p><strong>Price:</strong> €{{ "%.2f"|format(element.price) }}</p>
+{% endif %}
+
+<h2>Variables</h2>
+{% if variables %}
+<ul class="variable-list">
+    {% for var in variables %}
+    <li>
+        <span>
+            <strong>{{ var.variable_name }}</strong> 
+            ({{ var.variable_type }})
+            {% if var.unit %}[{{ var.unit }}]{% endif %}
+            {% if var.is_required %}<span class="required">*</span>{% endif %}
+        </span>
+        {% if var.default_value %}
+        <span>Default: {{ var.default_value }}</span>
+        {% endif %}
+    </li>
+    {% endfor %}
+</ul>
+{% else %}
+<p>No variables defined for this element.</p>
+{% endif %}
+
+<h2>Description Template</h2>
+{% if template %}
+<div class="template">{{ template }}</div>
+<p><em>Placeholders like {variable_name} will be replaced with actual values when used in projects.</em></p>
+{% else %}
+<p>No active template for this element.</p>
+{% endif %}
+
+<a href="/" class="btn">← Back to Elements</a>
+{% endblock %}
