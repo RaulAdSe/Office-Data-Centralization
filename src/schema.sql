@@ -11,6 +11,7 @@ CREATE TABLE elements (
     element_id      INTEGER PRIMARY KEY AUTOINCREMENT,
     element_code    VARCHAR(50) NOT NULL UNIQUE,
     element_name    VARCHAR(255) NOT NULL,
+    price           REAL,
     created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
     created_by      VARCHAR(100)
 );

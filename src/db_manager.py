@@ -70,6 +70,13 @@ class DatabaseManager:
         Args:
             conn: Database connection
         """
+        # Check if price column exists in elements table
+        cursor = conn.execute("PRAGMA table_info(elements)")
+        columns = [row[1] for row in cursor.fetchall()]
+        if 'price' not in columns:
+            conn.execute("ALTER TABLE elements ADD COLUMN price REAL")
+            conn.commit()
+        
         # Check if template_variable_mappings table exists
         cursor = conn.execute(
             "SELECT name FROM sqlite_master WHERE type='table' AND name='template_variable_mappings'"
@@ -233,6 +240,7 @@ class DatabaseManager:
         self,
         element_code: str,
         element_name: str,
+        price: Optional[float] = None,
         created_by: Optional[str] = None
     ) -> int:
         """
@@ -241,6 +249,7 @@ class DatabaseManager:
         Args:
             element_code: Unique code for the element
             element_name: Name of the element
+            price: Optional price for the element (independent of variables)
             created_by: User who created the element
             
         Returns:
@@ -248,9 +257,9 @@ class DatabaseManager:
         """
         with self.get_connection() as conn:
             cursor = conn.execute(
-                """INSERT INTO elements (element_code, element_name, created_by)
-                   VALUES (?, ?, ?)""",
-                (element_code, element_name, created_by)
+                """INSERT INTO elements (element_code, element_name, price, created_by)
+                   VALUES (?, ?, ?, ?)""",
+                (element_code, element_name, price, created_by)
             )
             return cursor.lastrowid
     
@@ -279,6 +288,25 @@ class DatabaseManager:
         with self.get_connection() as conn:
             cursor = conn.execute("SELECT * FROM elements ORDER BY element_code")
             return [dict(row) for row in cursor.fetchall()]
+    
+    def update_element_price(self, element_id: int, price: Optional[float]) -> bool:
+        """
+        Update the price of an element.
+        
+        Args:
+            element_id: ID of the element
+            price: New price value (None to clear the price)
+            
+        Returns:
+            True if successful
+        """
+        with self.get_connection() as conn:
+            cursor = conn.execute(
+                "UPDATE elements SET price = ? WHERE element_id = ?",
+                (price, element_id)
+            )
+            conn.commit()
+            return cursor.rowcount > 0
     
     # ============================================================
     # VARIABLE MANAGEMENT

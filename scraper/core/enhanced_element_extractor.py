@@ -349,8 +349,106 @@ class EnhancedElementExtractor:
         
         return "Unknown Option"
     
+    def extract_price(self, soup: BeautifulSoup) -> Optional[float]:
+        """Extract price from CYPE page tables and elements"""
+        try:
+            # Method 1: Look for price in table cells (most reliable)
+            tables = soup.find_all('table')
+            for table in tables:
+                cells = table.find_all(['td', 'th'])
+                for cell in cells:
+                    cell_text = cell.get_text().strip()
+                    # Look for price pattern: numbers with decimals and currency
+                    price_match = re.search(r'([0-9]+[,\.][0-9]{2})[€âŹâŽ]', cell_text)
+                    if price_match:
+                        price_str = price_match.group(1)
+                        # Convert Spanish decimal format to float
+                        price_float = float(price_str.replace(',', '.'))
+                        return price_float
+            
+            # Method 2: Look in meta description as fallback
+            meta_desc = soup.find('meta', attrs={'name': 'description'})
+            if meta_desc and meta_desc.get('content'):
+                desc_content = meta_desc['content']
+                price_match = re.search(r'([0-9]+[,\.][0-9]+)[€âŹâŽ]', desc_content)
+                if price_match:
+                    price_str = price_match.group(1)
+                    price_float = float(price_str.replace(',', '.'))
+                    return price_float
+            
+            return None
+            
+        except Exception as e:
+            print(f"  Warning: Could not extract price: {e}")
+            return None
+    
+    def extract_description(self, soup: BeautifulSoup) -> str:
+        """Extract clean description without price from meta description"""
+        try:
+            meta_desc = soup.find('meta', attrs={'name': 'description'})
+            if meta_desc and meta_desc.get('content'):
+                desc_text = meta_desc['content'].strip()
+                
+                # Clean encoding issues
+                desc_text = self.clean_text(desc_text)
+                
+                # Remove price from beginning using smart detection
+                construction_start = re.search(r'\b(Viga|Columna|Pilar|Forjado|Muro|Zapata|Cimiento)', desc_text)
+                if construction_start:
+                    # Keep everything from the construction element onwards
+                    desc_text = desc_text[construction_start.start():]
+                else:
+                    # Fallback: remove price patterns manually
+                    price_patterns = [
+                        r'^[0-9]+[,\.][0-9]+[€âŹâŽ]\s*',  # Price at start
+                        r'^[0-9\s,\.\€âŹâŽŹŽ]*',  # All price artifacts
+                    ]
+                    
+                    for pattern in price_patterns:
+                        desc_text = re.sub(pattern, '', desc_text)
+                
+                return desc_text.strip()
+                
+            return "Descripción no disponible"
+            
+        except Exception as e:
+            print(f"  Warning: Could not extract description: {e}")
+            return "Error extrayendo descripción"
+    
+    def extract_unit(self, soup: BeautifulSoup) -> str:
+        """Extract unit from CYPE page (m³, m², ud, etc.)"""
+        try:
+            # Look for units in table headers or cells
+            tables = soup.find_all('table')
+            for table in tables:
+                cells = table.find_all(['td', 'th'])
+                for cell in cells:
+                    cell_text = cell.get_text().strip()
+                    # Common CYPE units
+                    unit_match = re.search(r'\b(m³|mÂľ|m²|mÂş|m|ud|kg|t)\b', cell_text)
+                    if unit_match:
+                        unit = unit_match.group(1)
+                        # Clean encoding issues
+                        unit = unit.replace('Âľ', '³').replace('Âş', '²')
+                        return unit
+            
+            # Fallback: look in meta description
+            meta_desc = soup.find('meta', attrs={'name': 'description'})
+            if meta_desc and meta_desc.get('content'):
+                desc_content = meta_desc['content']
+                unit_match = re.search(r'de\s+(m³|mÂľ|m²|mÂş|m|ud|kg|t)\s+de', desc_content)
+                if unit_match:
+                    unit = unit_match.group(1).replace('Âľ', '³').replace('Âş', '²')
+                    return unit
+            
+            return "ud"  # Default unit
+            
+        except Exception as e:
+            print(f"  Warning: Could not extract unit: {e}")
+            return "ud"
+
     def extract_element_data(self, url: str) -> Optional[ElementData]:
-        """Extract enhanced element data with properly grouped variables"""
+        """Extract enhanced element data with properly separated price and description"""
         try:
             print(f"Extracting enhanced data from: {url}")
             
@@ -375,11 +473,20 @@ class EnhancedElementExtractor:
             
             print(f"  ✓ Element: {code} - {title}")
             
-            # Extract other data using existing methods (would need to copy from original)
-            # For this demo, I'll use simplified versions
-            unit = "ud"  # Simplified
-            price = None  # Would extract properly
-            description = self.clean_text(text[:500])  # Simplified
+            # Extract price separately from table cells
+            price = self.extract_price(soup)
+            if price:
+                print(f"  ✓ Price: {price}€")
+            else:
+                print(f"  ⚠ Price not found")
+            
+            # Extract unit 
+            unit = self.extract_unit(soup)
+            print(f"  ✓ Unit: {unit}")
+            
+            # Extract description without price
+            description = self.extract_description(soup)
+            print(f"  ✓ Description: {description[:60]}...")
             
             # Extract enhanced variables
             variables = self.extract_variables_enhanced(soup, text)
