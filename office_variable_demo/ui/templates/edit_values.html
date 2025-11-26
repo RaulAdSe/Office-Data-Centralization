@@ -18,7 +18,20 @@
         
         {% set current_value = current_values.get(var.variable_name, var.default_value or '') %}
         
-        {% if var.variable_type == 'TEXT' %}
+        {% if var.options %}
+        <!-- Show dropdown for variables with options -->
+        <select id="var_{{ var.variable_name }}" 
+                name="var_{{ var.variable_name }}" 
+                {% if var.is_required %}required{% endif %}>
+            <option value="">-- Select {{ var.variable_name }} --</option>
+            {% for option in var.options %}
+            <option value="{{ option }}" 
+                    {% if option == current_value %}selected{% endif %}>
+                {{ option }}
+            </option>
+            {% endfor %}
+        </select>
+        {% elif var.variable_type == 'TEXT' %}
         <input type="text" 
                id="var_{{ var.variable_name }}" 
                name="var_{{ var.variable_name }}" 

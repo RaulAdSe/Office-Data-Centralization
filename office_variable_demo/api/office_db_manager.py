@@ -25,6 +25,7 @@ class Variable:
     unit: Optional[str] = None
     is_required: bool = True
     default_value: Optional[str] = None
+    options: List[str] = None
 
 @dataclass
 class ProjectElement:
@@ -55,7 +56,7 @@ class OfficeDBManager:
             return [Element(*row) for row in cursor.fetchall()]
     
     def get_element_variables(self, element_id: int) -> List[Variable]:
-        """Get all variables for an element"""
+        """Get all variables for an element with their options"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("""
@@ -64,7 +65,23 @@ class OfficeDBManager:
                 WHERE element_id = ?
                 ORDER BY display_order
             """, (element_id,))
-            return [Variable(*row) for row in cursor.fetchall()]
+            
+            variables = []
+            for row in cursor.fetchall():
+                var_id = row[0]
+                
+                # Get options for this variable
+                cursor.execute("""
+                    SELECT option_value 
+                    FROM variable_options 
+                    WHERE variable_id = ? 
+                    ORDER BY is_default DESC, option_value
+                """, (var_id,))
+                options = [opt[0] for opt in cursor.fetchall()]
+                
+                variables.append(Variable(*row, options=options if options else None))
+                
+            return variables
     
     def get_element_by_code(self, element_code: str) -> Optional[Element]:
         """Get element by code"""
@@ -175,23 +192,36 @@ class OfficeDBManager:
             
             values = dict(cursor.fetchall())
             
+            # Get ALL available variables for this element (including unset ones)
+            cursor.execute("""
+                SELECT ev.variable_name, COALESCE(pev.value, ev.default_value, '') as value
+                FROM element_variables ev
+                LEFT JOIN project_element_values pev ON ev.variable_id = pev.variable_id 
+                    AND pev.project_element_id = ?
+                JOIN project_elements pe ON ev.element_id = pe.element_id
+                WHERE pe.project_element_id = ?
+            """, (project_element_id, project_element_id))
+            
+            all_values = dict(cursor.fetchall())
+            values.update(all_values)  # Merge with existing values
+            
             # Replace placeholders (enhanced regex to handle underscores and numbers)
             def replace_placeholder(match):
                 var_name = match.group(1)
                 # Try exact match first
-                if var_name in values:
+                if var_name in values and values[var_name]:
                     return values[var_name]
                 
                 # Try without trailing numbers (sistema_encofrado_1 → sistema_encofrado)
                 base_name = re.sub(r'_\d+$', '', var_name)
-                if base_name in values:
+                if base_name in values and values[base_name]:
                     return values[base_name]
                 
                 # Try without trailing _1 specifically  
-                if var_name.endswith('_1') and var_name[:-2] in values:
+                if var_name.endswith('_1') and var_name[:-2] in values and values[var_name[:-2]]:
                     return values[var_name[:-2]]
                     
-                return f"{{{var_name}}}"  # Keep placeholder if no value
+                return ""  # Remove placeholder if no value found
             
             rendered = re.sub(r'\{([^}]+)\}', replace_placeholder, template)
             

@@ -12,7 +12,8 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from api.office_db_manager import OfficeDBManager
 
 app = Flask(__name__)
-db_manager = OfficeDBManager()
+# Use the real CYPE database with 75 elements and 7,274+ variables
+db_manager = OfficeDBManager('../../src/office_data.db')
 
 @app.route('/')
 def index():
