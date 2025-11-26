@@ -17,7 +17,8 @@
 {% if project_elements %}
     {% for pe in project_elements %}
     <div class="element-card" style="margin-bottom: 30px;">
-        <h3>{{ pe.instance_code }} - {{ pe.instance_name }}</h3>
+        <h3>{{ pe.instance_code }}{% if pe.instance_name %} - {{ pe.instance_name }}{% endif %}</h3>
+        <h4 style="color: #2c5aa0; margin-top: 5px;">{{ pe.element_name }}</h4>
         <div class="element-code">{{ pe.element_code }}</div>
         
         <h4>Variables & Values:</h4>

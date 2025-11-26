@@ -33,6 +33,7 @@ class ProjectElement:
     instance_code: str
     instance_name: str
     element_code: str
+    element_name: str
     values: Dict[str, str]
     rendered_description: Optional[str] = None
 
@@ -241,7 +242,7 @@ class OfficeDBManager:
             
             # Get project elements
             cursor.execute("""
-                SELECT pe.project_element_id, pe.instance_code, pe.instance_name, e.element_code
+                SELECT pe.project_element_id, pe.instance_code, pe.instance_name, e.element_code, e.element_name
                 FROM project_elements pe
                 JOIN elements e ON pe.element_id = e.element_id
                 WHERE pe.project_id = ?
@@ -249,7 +250,7 @@ class OfficeDBManager:
             """, (project_id,))
             
             elements = []
-            for pe_id, instance_code, instance_name, element_code in cursor.fetchall():
+            for pe_id, instance_code, instance_name, element_code, element_name in cursor.fetchall():
                 # Get values for this element
                 cursor.execute("""
                     SELECT ev.variable_name, pev.value
@@ -266,6 +267,7 @@ class OfficeDBManager:
                     instance_code=instance_code,
                     instance_name=instance_name or "",
                     element_code=element_code,
+                    element_name=element_name,
                     values=values,
                     rendered_description=rendered
                 ))

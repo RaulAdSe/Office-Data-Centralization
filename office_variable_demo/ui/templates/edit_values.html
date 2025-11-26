@@ -4,7 +4,8 @@
 
 {% block content %}
 <h1>Edit Variable Values</h1>
-<h2>{{ pe_info[4] }} - {{ pe_info[3] }}</h2>
+<h2>{{ pe_info[4] }}{% if pe_info[3] %} - {{ pe_info[3] }}{% endif %}</h2>
+<h3 style="color: #2c5aa0; margin-top: 5px;">{{ pe_info[7] }}</h3>
 <div class="element-code">{{ pe_info[6] }}</div>
 
 <form method="POST">
