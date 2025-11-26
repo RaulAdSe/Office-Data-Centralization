@@ -609,16 +609,11 @@ class EnhancedTemplateSystem:
         return patterns
     
     def create_enhanced_dynamic_template(self, element_code, variations):
-        """Create enhanced dynamic template using differential analysis of variations"""
+        """Create enhanced dynamic template using enhanced variables first, then differential analysis"""
         
         descriptions = [v['description'] for v in variations]
         
-        # Check if we have multiple variations for differential analysis
-        if len(variations) > 1:
-            print(f"     🔬 Performing differential analysis on {len(variations)} variations")
-            return self.create_template_from_differential_analysis(element_code, variations)
-        
-        # Single variation - use enhanced variables from extraction
+        # ALWAYS try enhanced variables first (single OR multiple variations)
         first_variation = variations[0]
         if 'variables' in first_variation and first_variation['variables']:
             print(f"     🎯 Using extracted enhanced variables: {len(first_variation['variables'])} variables")
@@ -656,6 +651,11 @@ class EnhancedTemplateSystem:
                 'price': first_variation['price'],  # Base price from first variation
                 'source_urls': [v['url'] for v in variations]
             }
+        
+        # Check if we have multiple variations for differential analysis
+        if len(variations) > 1:
+            print(f"     🔬 Performing differential analysis on {len(variations)} variations")
+            return self.create_template_from_differential_analysis(element_code, variations)
         
         # Fallback to old difference detection if no enhanced variables
         print(f"     ⚠ No enhanced variables found, using difference detection")
