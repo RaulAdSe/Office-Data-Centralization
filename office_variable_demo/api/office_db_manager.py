@@ -175,12 +175,25 @@ class OfficeDBManager:
             
             values = dict(cursor.fetchall())
             
-            # Replace placeholders
+            # Replace placeholders (enhanced regex to handle underscores and numbers)
             def replace_placeholder(match):
                 var_name = match.group(1)
-                return values.get(var_name, f"{{{var_name}}}")  # Keep placeholder if no value
+                # Try exact match first
+                if var_name in values:
+                    return values[var_name]
+                
+                # Try without trailing numbers (sistema_encofrado_1 → sistema_encofrado)
+                base_name = re.sub(r'_\d+$', '', var_name)
+                if base_name in values:
+                    return values[base_name]
+                
+                # Try without trailing _1 specifically  
+                if var_name.endswith('_1') and var_name[:-2] in values:
+                    return values[var_name[:-2]]
+                    
+                return f"{{{var_name}}}"  # Keep placeholder if no value
             
-            rendered = re.sub(r'\{(\w+)\}', replace_placeholder, template)
+            rendered = re.sub(r'\{([^}]+)\}', replace_placeholder, template)
             
             # Store rendered description
             cursor.execute("""

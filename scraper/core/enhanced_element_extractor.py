@@ -60,7 +60,7 @@ class EnhancedElementExtractor:
             'â‚¬': '€', 'mÂ³': 'm³', 'mÂ²': 'm²', 'Â°': '°',
             
             # Common encoding artifacts
-            'Â': '', 'â€™': "'", 'â€œ': '"', 
+            'Â': '', 'â€™': "'", 'â€œ': '"', '¬': '',  # Remove ¬ character
             
             # HTML-like entities that sometimes appear
             '&nbsp;': ' ', '&amp;': '&', '&lt;': '<', '&gt;': '>',
