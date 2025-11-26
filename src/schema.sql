@@ -1,17 +1,16 @@
 -- ============================================================
--- SIMPLIFIED PARAMETRIC ELEMENT DESCRIPTION SYSTEM (SQLite)
--- No ENUM variables, no variable_options table
+-- COMPLETE SCHEMA WITH VARIABLE OPTIONS
+-- Handles both free-form input AND fixed dropdown options
 -- ============================================================
 
 -- ============================================================
--- PART 1: ELEMENT TEMPLATE DEFINITIONS (SIMPLIFIED)
+-- PART 1: ELEMENT TEMPLATE DEFINITIONS
 -- ============================================================
 
 CREATE TABLE elements (
     element_id      INTEGER PRIMARY KEY AUTOINCREMENT,
     element_code    VARCHAR(50) NOT NULL UNIQUE,
     element_name    VARCHAR(255) NOT NULL,
-    price           REAL,
     created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
     created_by      VARCHAR(100)
 );
@@ -34,7 +33,25 @@ CREATE TABLE element_variables (
 
 CREATE INDEX idx_element_variables_element ON element_variables(element_id);
 
--- NO variable_options table!
+-- ============================================================
+-- VARIABLE OPTIONS (For dropdown/select inputs)
+-- ============================================================
+
+CREATE TABLE variable_options (
+    option_id       INTEGER PRIMARY KEY AUTOINCREMENT,
+    variable_id     INTEGER NOT NULL REFERENCES element_variables(variable_id) ON DELETE CASCADE,
+    option_value    VARCHAR(255) NOT NULL,
+    option_label    VARCHAR(255),           -- Optional display label (e.g., "Hormigón" for value "concrete")
+    display_order   INTEGER DEFAULT 0,
+    is_default      BOOLEAN DEFAULT 0,      -- Mark default option
+    created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+    
+    UNIQUE (variable_id, option_value)
+);
+
+CREATE INDEX idx_variable_options_variable ON variable_options(variable_id);
+
+COMMENT ON TABLE variable_options IS 'Fixed options for dropdown/select inputs. If variable has options here, show dropdown. If not, show free input.';
 
 -- ============================================================
 -- PART 2: DESCRIPTION VERSIONING
@@ -55,11 +72,24 @@ CREATE TABLE description_versions (
     CHECK (is_active = 0 OR state = 'S3')
 );
 
--- SQLite doesn't support partial unique indexes with WHERE clause in older versions
--- We'll enforce the "one active per element" constraint in application logic
--- A trigger could also be used, but application-level check is simpler
-
 CREATE INDEX idx_description_versions_element_state ON description_versions(element_id, state);
+
+-- ============================================================
+
+CREATE TABLE template_variable_mappings (
+    mapping_id      INTEGER PRIMARY KEY AUTOINCREMENT,
+    version_id      INTEGER NOT NULL REFERENCES description_versions(version_id) ON DELETE CASCADE,
+    variable_id     INTEGER NOT NULL REFERENCES element_variables(variable_id) ON DELETE CASCADE,
+    placeholder     VARCHAR(100) NOT NULL,
+    position        INTEGER NOT NULL,
+    created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+    
+    UNIQUE (version_id, placeholder),
+    UNIQUE (version_id, position)
+);
+
+CREATE INDEX idx_template_mappings_version ON template_variable_mappings(version_id);
+CREATE INDEX idx_template_mappings_variable ON template_variable_mappings(variable_id);
 
 -- ============================================================
 
@@ -74,25 +104,6 @@ CREATE TABLE approvals (
 );
 
 CREATE INDEX idx_approvals_version ON approvals(version_id);
-
--- ============================================================
--- NEW: EXPLICIT PLACEHOLDER-TO-VARIABLE MAPPINGS
--- ============================================================
-
-CREATE TABLE template_variable_mappings (
-    mapping_id      INTEGER PRIMARY KEY AUTOINCREMENT,
-    version_id      INTEGER NOT NULL REFERENCES description_versions(version_id) ON DELETE CASCADE,
-    variable_id     INTEGER NOT NULL REFERENCES element_variables(variable_id) ON DELETE CASCADE,
-    placeholder     VARCHAR(100) NOT NULL,  -- The {placeholder} name in template
-    position        INTEGER NOT NULL,       -- Order of appearance in template (1, 2, 3...)
-    created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
-    
-    UNIQUE (version_id, placeholder),
-    UNIQUE (version_id, position)
-);
-
-CREATE INDEX idx_template_mappings_version ON template_variable_mappings(version_id);
-CREATE INDEX idx_template_mappings_variable ON template_variable_mappings(variable_id);
 
 -- ============================================================
 -- PART 3: PROJECTS
@@ -160,7 +171,6 @@ CREATE TABLE rendered_descriptions (
 -- PART 5: TRIGGERS
 -- ============================================================
 
--- Trigger to mark descriptions as stale when values change
 CREATE TRIGGER trg_mark_stale_on_value_change
 AFTER INSERT ON project_element_values
 BEGIN
@@ -241,8 +251,10 @@ JOIN description_versions dv ON pe.description_version_id = dv.version_id
 LEFT JOIN rendered_descriptions rd ON pe.project_element_id = rd.project_element_id;
 
 -- ============================================================
+-- NEW: VIEW TO SEE VARIABLES WITH THEIR OPTIONS (FOR UI FORMS)
+-- ============================================================
 
-CREATE VIEW v_element_variables_simple AS
+CREATE VIEW v_element_variables_with_options AS
 SELECT 
     e.element_code,
     e.element_name,
@@ -252,34 +264,17 @@ SELECT
     ev.unit,
     ev.default_value,
     ev.is_required,
-    ev.display_order
+    ev.display_order,
+    CASE 
+        WHEN EXISTS (SELECT 1 FROM variable_options WHERE variable_id = ev.variable_id)
+        THEN 'DROPDOWN'
+        ELSE 'FREE_INPUT'
+    END AS input_type,
+    (SELECT COUNT(*) FROM variable_options WHERE variable_id = ev.variable_id) AS option_count
 FROM elements e
 JOIN element_variables ev ON e.element_id = ev.element_id
 ORDER BY e.element_code, ev.display_order;
 
 -- ============================================================
--- NEW: VIEW TO SEE TEMPLATE MAPPINGS
+-- END OF SCHEMA
 -- ============================================================
-
-CREATE VIEW v_template_variable_mappings AS
-SELECT 
-    e.element_code,
-    dv.version_id,
-    dv.version_number,
-    dv.description_template,
-    dv.state,
-    tvm.placeholder,
-    tvm.position,
-    ev.variable_name,
-    ev.variable_type,
-    ev.unit
-FROM template_variable_mappings tvm
-JOIN description_versions dv ON tvm.version_id = dv.version_id
-JOIN elements e ON dv.element_id = e.element_id
-JOIN element_variables ev ON tvm.variable_id = ev.variable_id
-ORDER BY dv.version_id, tvm.position;
-
--- ============================================================
--- END OF SIMPLIFIED SCHEMA
--- ============================================================
-

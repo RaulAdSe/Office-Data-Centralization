@@ -4,22 +4,28 @@ Production-ready web scraper for comprehensive CYPE construction element discove
 
 ## Quick Start
 
-### Discover All Elements
+### 🚀 **Production Command** (Enhanced System with Placeholders)
+```bash
+cd template_extraction
+python3 production_enhanced_pipeline.py
+```
+
+### 🔍 **Discover All Elements**
 ```bash
 cd core
 python3 final_production_crawler.py
 ```
 
-### Extract Element Data and Templates  
-```bash
-cd template_extraction
-python3 final_working_test.py
-```
-
-### Run Tests
+### 🧪 **Run Final Validation Test**
 ```bash
 cd tests
-python3 test_single_integration.py
+python3 test_final_placeholders.py
+```
+
+### 📊 **Legacy Base System** (For Reference)
+```bash
+cd template_extraction
+python3 production_base_system.py
 ```
 
 ## Current System Status
@@ -71,6 +77,9 @@ Core system components for element discovery and extraction:
 ### 🏗️ **template_extraction/** - Template Generation System
 Advanced template generation using URL variation analysis:
 
+- **`enhanced_template_system.py`** - ⭐ **PRODUCTION** Enhanced template system with smart placeholder detection
+- **`production_enhanced_pipeline.py`** - ⭐ **PRODUCTION** Complete enhanced pipeline for dynamic templates
+- **`production_base_system.py`** - Base production system (original working version)
 - **`smart_template_extractor.py`** - Template generation using strategic combinations
 - **`template_db_integrator.py`** - Database integration with proper schema mapping
 - **`final_working_test.py`** - Complete pipeline test for template generation
@@ -85,6 +94,9 @@ Advanced template generation using URL variation analysis:
 ### 🧪 **tests/** - Comprehensive Test Suite
 All testing scripts for validation and development:
 
+- **`test_final_placeholders.py`** - ⭐ **FINAL TEST** Validates enhanced templates with placeholders work end-to-end
+- **`test_dynamic_placeholders.py`** - Tests dynamic placeholder generation with known variations
+- **`test_complete_enhanced_pipeline.py`** - Complete enhanced pipeline validation
 - **`test_single_integration.py`** - Integration tests for core functionality
 - **`test_spanish_variables.py`** - Spanish data validation and UTF-8 testing
 - **`analyze_variables.py`** - Variable structure analysis
@@ -106,9 +118,11 @@ Production verification and monitoring tools:
 ### 🏛️ **legacy/** - Deprecated Components
 Legacy and deprecated scripts maintained for reference:
 
+- **`run_complete_pipeline.py`** - Old complete pipeline (replaced by enhanced versions)
+- **`run_full_production_pipeline.py`** - Old production pipeline (replaced by enhanced versions)
 - **`comprehensive_crawler.py`** - Early crawler version (replaced by final_production_crawler)
 - **`element_extractor.py`** - Original extractor (replaced by enhanced_element_extractor)
-- **`template_extractor.py`** - Basic template extractor (replaced by smart_template_extractor)
+- **`template_extractor.py`** - Basic template extractor (replaced by enhanced_template_system)
 - **`scraper.py`** - Initial scraper implementation
 - **`url_crawler.py`** - Basic URL crawler
 - *...and additional deprecated development versions*

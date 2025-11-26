@@ -136,27 +136,7 @@ class DatabaseManager:
             
             conn.commit()
         
-        # Check if variable_options table exists
-        cursor = conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name='variable_options'"
-        )
-        if cursor.fetchone() is None:
-            # Create variable_options table
-            conn.execute("""
-                CREATE TABLE variable_options (
-                    option_id       INTEGER PRIMARY KEY AUTOINCREMENT,
-                    variable_id     INTEGER NOT NULL REFERENCES element_variables(variable_id) ON DELETE CASCADE,
-                    option_value    VARCHAR(255) NOT NULL,
-                    option_label    VARCHAR(255),
-                    display_order   INTEGER DEFAULT 0,
-                    is_default      BOOLEAN DEFAULT 0,
-                    created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    
-                    UNIQUE (variable_id, option_value)
-                )
-            """)
-            conn.execute("CREATE INDEX idx_variable_options_variable ON variable_options(variable_id)")
-            conn.commit()
+        # variable_options table is part of the main schema now
         
         # Check if view exists
         cursor = conn.execute(
@@ -240,7 +220,7 @@ class DatabaseManager:
         self,
         element_code: str,
         element_name: str,
-        price: Optional[float] = None,
+        price: Optional[float] = None,  # Keep parameter for compatibility but ignore
         created_by: Optional[str] = None
     ) -> int:
         """
@@ -249,7 +229,7 @@ class DatabaseManager:
         Args:
             element_code: Unique code for the element
             element_name: Name of the element
-            price: Optional price for the element (independent of variables)
+            price: Ignored (kept for compatibility)
             created_by: User who created the element
             
         Returns:
@@ -257,9 +237,9 @@ class DatabaseManager:
         """
         with self.get_connection() as conn:
             cursor = conn.execute(
-                """INSERT INTO elements (element_code, element_name, price, created_by)
-                   VALUES (?, ?, ?, ?)""",
-                (element_code, element_name, price, created_by)
+                """INSERT INTO elements (element_code, element_name, created_by)
+                   VALUES (?, ?, ?)""",
+                (element_code, element_name, created_by)
             )
             return cursor.lastrowid
     
@@ -356,7 +336,7 @@ class DatabaseManager:
             )
             variable_id = cursor.lastrowid
             
-            # Add options if provided (using same connection)
+            # Add options to variable_options table if provided
             if options:
                 for opt in options:
                     conn.execute(
