@@ -63,8 +63,8 @@ def crear_y_poblar():
     )
 
     # C) Definir la Plantilla de Texto
-    # Fíjate que usamos placeholders {vidrio_ph} que luego mapearemos
-    texto_plantilla = "Muro cortina formado por vidrio {vidrio_ph} sobre perfilería de {perfil_ph} mm. Transmitancia térmica U={trans_ph}."
+    # Use actual variable names as placeholders
+    texto_plantilla = "Muro cortina formado por vidrio {tipo_vidrio} sobre perfilería de {espesor_perfil} mm. Transmitancia térmica U={transmitancia}."
     
     version_id = db_manager.create_proposal(
         element_id=element_id,
@@ -76,16 +76,7 @@ def crear_y_poblar():
     for _ in range(3):
         db_manager.approve_proposal(version_id, "gestor_db", "Auto-approved")
 
-    # D) Create template variable mappings manually (since DatabaseManager doesn't have this method yet)
-    with db_manager.get_connection() as conn:
-        cursor = conn.cursor()
-        mappings = [
-            (version_id, var_vidrio, '{vidrio_ph}', 1),
-            (version_id, var_perfil, '{perfil_ph}', 2),
-            (version_id, var_transmitancia, '{trans_ph}', 3)
-        ]
-        cursor.executemany("INSERT INTO template_variable_mappings (version_id, variable_id, placeholder, position) VALUES (?, ?, ?, ?)", mappings)
-        conn.commit()
+    # D) Template mappings are created automatically by DatabaseManager
 
     print("Catálogo de elementos (Muro Cortina) definido.")
 
