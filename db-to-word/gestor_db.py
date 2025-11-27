@@ -1,5 +1,12 @@
 import sqlite3
 import os
+import sys
+from pathlib import Path
+
+# Add src to path for importing DatabaseManager
+sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
+
+from db_manager import DatabaseManager
 
 # Nombre de la base de datos
 DB_NAME = "office_data.db"
@@ -10,54 +17,75 @@ def crear_y_poblar():
         os.remove(DB_NAME)
         print(f"Base de datos anterior '{DB_NAME}' eliminada.")
 
-    conn = sqlite3.connect(DB_NAME)
-    cursor = conn.cursor()
-
-    # --- 1. EJECUTAR EL SCHEMA (Crear tablas) ---
-    print("Leyendo schema.sql...")
-    with open("schema.sql", "r") as f:
-        cursor.executescript(f.read())
-    print("Tablas creadas correctamente.")
+    # Initialize database using DatabaseManager (this automatically creates schema)
+    db_manager = DatabaseManager(DB_NAME)
+    print("Base de datos y esquema creados usando DatabaseManager.")
 
     # ==========================================
     # 2. DEFINICIÓN DEL CATÁLOGO (Elementos)
     # ==========================================
     
     # A) Crear un Elemento: Muro Cortina
-    cursor.execute("INSERT INTO elements (element_code, element_name) VALUES (?, ?)", 
-                   ("MC-01", "Muro Cortina Vidrio"))
-    element_id = cursor.lastrowid
+    element_id = db_manager.create_element(
+        element_code="MC-01",
+        element_name="Muro Cortina Vidrio",
+        created_by="gestor_db"
+    )
 
     # B) Definir sus Variables (Qué datos pide este elemento)
-    vars_data = [
-        (element_id, "tipo_vidrio", "TEXT", None, "Templado"),
-        (element_id, "espesor_perfil", "NUMERIC", "mm", "50"),
-        (element_id, "transmitancia", "NUMERIC", "W/m2K", "1.1")
-    ]
-    cursor.executemany("""
-        INSERT INTO element_variables (element_id, variable_name, variable_type, unit, default_value) 
-        VALUES (?, ?, ?, ?, ?)""", vars_data)
+    var_vidrio = db_manager.add_variable(
+        element_id=element_id,
+        variable_name="tipo_vidrio",
+        variable_type="TEXT",
+        default_value="Templado",
+        is_required=True,
+        display_order=1
+    )
     
-    # Recuperamos los IDs de las variables para usarlos luego
-    cursor.execute("SELECT variable_id, variable_name FROM element_variables WHERE element_id = ?", (element_id,))
-    mis_vars = {row[1]: row[0] for row in cursor.fetchall()} 
+    var_perfil = db_manager.add_variable(
+        element_id=element_id,
+        variable_name="espesor_perfil",
+        variable_type="NUMERIC",
+        unit="mm",
+        default_value="50",
+        is_required=True,
+        display_order=2
+    )
+    
+    var_transmitancia = db_manager.add_variable(
+        element_id=element_id,
+        variable_name="transmitancia",
+        variable_type="NUMERIC",
+        unit="W/m2K",
+        default_value="1.1",
+        is_required=True,
+        display_order=3
+    )
 
     # C) Definir la Plantilla de Texto
     # Fíjate que usamos placeholders {vidrio_ph} que luego mapearemos
     texto_plantilla = "Muro cortina formado por vidrio {vidrio_ph} sobre perfilería de {perfil_ph} mm. Transmitancia térmica U={trans_ph}."
     
-    cursor.execute("""
-        INSERT INTO description_versions (element_id, description_template, state, is_active, version_number)
-        VALUES (?, ?, 'S3', 1, 1)""", (element_id, texto_plantilla))
-    version_id = cursor.lastrowid
+    version_id = db_manager.create_proposal(
+        element_id=element_id,
+        description_template=texto_plantilla,
+        created_by="gestor_db"
+    )
+    
+    # Approve the proposal to S3 (active)
+    for _ in range(3):
+        db_manager.approve_proposal(version_id, "gestor_db", "Auto-approved")
 
-    # D) Mapear: Decir qué variable va en qué {placeholder}
-    mappings = [
-        (version_id, mis_vars['tipo_vidrio'], '{vidrio_ph}', 1),
-        (version_id, mis_vars['espesor_perfil'], '{perfil_ph}', 2),
-        (version_id, mis_vars['transmitancia'], '{trans_ph}', 3)
-    ]
-    cursor.executemany("INSERT INTO template_variable_mappings (version_id, variable_id, placeholder, position) VALUES (?, ?, ?, ?)", mappings)
+    # D) Create template variable mappings manually (since DatabaseManager doesn't have this method yet)
+    with db_manager.get_connection() as conn:
+        cursor = conn.cursor()
+        mappings = [
+            (version_id, var_vidrio, '{vidrio_ph}', 1),
+            (version_id, var_perfil, '{perfil_ph}', 2),
+            (version_id, var_transmitancia, '{trans_ph}', 3)
+        ]
+        cursor.executemany("INSERT INTO template_variable_mappings (version_id, variable_id, placeholder, position) VALUES (?, ?, ?, ?)", mappings)
+        conn.commit()
 
     print("Catálogo de elementos (Muro Cortina) definido.")
 
@@ -66,30 +94,35 @@ def crear_y_poblar():
     # ==========================================
 
     # A) Crear Proyecto
-    cursor.execute("INSERT INTO projects (project_code, project_name, status) VALUES (?, ?, ?)", 
-                   ("PROY-2025", "Torre Ejecutiva Norte", "ACTIVE"))
-    project_id = cursor.lastrowid
+    project_id = db_manager.create_project(
+        project_code="PROY-2025",
+        project_name="Torre Ejecutiva Norte",
+        status="ACTIVE",
+        created_by="gestor_db"
+    )
 
     # B) Usar el elemento en el proyecto (Ej: "Fachada Sur")
-    cursor.execute("""
-        INSERT INTO project_elements (project_id, element_id, description_version_id, instance_code, instance_name)
-        VALUES (?, ?, ?, ?, ?)""", (project_id, element_id, version_id, "FACH-SUR", "Fachada Principal Sur"))
-    project_element_id = cursor.lastrowid
+    project_element_id = db_manager.create_project_element(
+        project_id=project_id,
+        element_id=element_id,
+        description_version_id=version_id,
+        instance_code="FACH-SUR",
+        instance_name="Fachada Principal Sur",
+        created_by="gestor_db"
+    )
 
     # C) Asignar VALORES específicos para ESTA fachada
     # Aquí decimos: En ESTE proyecto, el vidrio es "Doble Bajo Emisivo" y el perfil "80"
-    valores = [
-        (project_element_id, mis_vars['tipo_vidrio'], "Doble Bajo Emisivo"),
-        (project_element_id, mis_vars['espesor_perfil'], "80"), 
-        (project_element_id, mis_vars['transmitancia'], "0.9")
-    ]
-    cursor.executemany("INSERT INTO project_element_values (project_element_id, variable_id, value) VALUES (?, ?, ?)", valores)
+    db_manager.set_element_value(project_element_id, var_vidrio, "Doble Bajo Emisivo", "gestor_db")
+    db_manager.set_element_value(project_element_id, var_perfil, "80", "gestor_db")
+    db_manager.set_element_value(project_element_id, var_transmitancia, "0.9", "gestor_db")
 
     # D) Inicializar la tabla de renderizado (necesario para que el sistema sepa que hay que calcular texto)
-    cursor.execute("INSERT INTO rendered_descriptions (project_element_id, rendered_text, is_stale) VALUES (?, '', 1)", (project_element_id,))
+    with db_manager.get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("INSERT INTO rendered_descriptions (project_element_id, rendered_text, is_stale) VALUES (?, '', 1)", (project_element_id,))
+        conn.commit()
 
-    conn.commit()
-    conn.close()
     print(f"¡Hecho! Base de datos '{DB_NAME}' creada y poblada.")
 
 if __name__ == "__main__":

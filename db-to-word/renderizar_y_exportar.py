@@ -1,20 +1,25 @@
 import sqlite3
 import pandas as pd
 import os
-import re 
+import re
+import sys
+from pathlib import Path
 
-# --- CONFIGURACIÓ ---
+# Add src to path for importing DatabaseManager
+sys.path.insert(0, str(Path(__file__).parent.parent / 'src')) 
+
+# --- CONFIGURATION ---
 DB_NAME = "office_data.db" 
 
-# --- FUNCIONS ---
+# --- FUNCTIONS ---
 def renderizar_textos(conn):
     """
-    Calcula els textos finals substituint els {placeholders} per valors reals.
+    Calculate final texts by substituting {placeholders} with real values.
     """
     cursor = conn.cursor()
-    print("   [1/2] Calculant textos paramètrics (Renderitzant)...")
+    print("   [1/2] Calculating parametric texts (Rendering)...")
 
-    # A. Buscar quins elements necessiten actualitzar-se
+    # A. Find which elements need to be updated
     query_pendientes = """
     SELECT rd.project_element_id, pe.description_version_id, dv.description_template
     FROM rendered_descriptions rd
@@ -25,13 +30,13 @@ def renderizar_textos(conn):
     pendientes = cursor.execute(query_pendientes).fetchall()
     
     if not pendientes:
-        print("         -> No cal recalcular res.")
+        print("         -> Nothing to recalculate.")
         return
 
-    print(f"         -> S'han trobat {len(pendientes)} elements per processar.")
+    print(f"         -> Found {len(pendientes)} elements to process.")
 
     for p_elem_id, version_id, template in pendientes:
-        # B. Buscar valors per a aquest element
+        # B. Find values for this element
         query_valores = """
         SELECT tvm.placeholder, pev.value
         FROM template_variable_mappings tvm
@@ -40,15 +45,23 @@ def renderizar_textos(conn):
         """
         valores = cursor.execute(query_valores, (version_id, p_elem_id)).fetchall()
 
-        # C. Substituir text
+        # C. Substitute text
         texto_final = template
         for placeholder, valor_real in valores:
             if valor_real:
                 texto_final = texto_final.replace(placeholder, str(valor_real))
             else:
-                texto_final = texto_final.replace(placeholder, "[SIN VALOR]")
+                texto_final = texto_final.replace(placeholder, "[NO VALUE]")
 
-        # D. Guardar resultat
+        # C.1. Validate that all placeholders were replaced
+        remaining_placeholders = re.findall(r'\{[^}]+\}', texto_final)
+        if remaining_placeholders:
+            print(f"         -> WARNING: Unreplaced placeholders found in element {p_elem_id}: {remaining_placeholders}")
+            # Replace remaining placeholders with a warning message
+            for placeholder in remaining_placeholders:
+                texto_final = texto_final.replace(placeholder, "[UNMAPPED PLACEHOLDER]")
+
+        # D. Save result
         cursor.execute("""
             UPDATE rendered_descriptions 
             SET rendered_text = ?, is_stale = 0, rendered_at = CURRENT_TIMESTAMP
@@ -56,33 +69,33 @@ def renderizar_textos(conn):
         """, (texto_final, p_elem_id))
 
     conn.commit()
-    print("         -> Càlcul completat.")
+    print("         -> Calculation completed.")
 
 
 def exportar_excel_friendly(codigo_proyecto):
     """
-    Genera un Excel pensat per a l'usuari final (Mail Merge)
-    amb noms de columnes nets i ordenats per jerarquia.
+    Generate an Excel file designed for end-user (Mail Merge)
+    with clean column names ordered by hierarchy.
     """
-    print(f"\n--- Generant Excel Optimitzat per a Usuari: {codigo_proyecto} ---")
+    print(f"\n--- Generating User-Optimized Excel: {codigo_proyecto} ---")
     
-    # Comprovació de seguretat
+    # Security check
     if not os.path.exists(DB_NAME):
-        print(f"❌ ERROR CRÍTIC: No trobo el fitxer '{DB_NAME}'.")
-        print(f"   Estic buscant a: {os.getcwd()}")
-        print("   Assegura't d'haver executat primer 'gestor_db.py'.")
+        print(f"❌ CRITICAL ERROR: Cannot find file '{DB_NAME}'.")
+        print(f"   Looking in: {os.getcwd()}")
+        print("   Make sure you've executed 'gestor_db.py' first.")
         return
 
     conn = sqlite3.connect(DB_NAME)
     
-    # 1. Calcular textos abans d'exportar
+    # 1. Calculate texts before exporting
     renderizar_textos(conn)
 
-    # 2. Obtenim dades (afegim element_code per poder agrupar millor)
+    # 2. Get data (add element_code for better grouping)
     query = """
     SELECT 
         pe.instance_code,
-        e.element_code,   -- Ens serveix per saber el 'Tipus'
+        e.element_code,   -- Used to know the 'Type'
         pe.instance_name,
         pe.location,
         rd.rendered_text,
@@ -98,54 +111,54 @@ def exportar_excel_friendly(codigo_proyecto):
     conn.close()
 
     if df.empty:
-        print(f"❌ Error: No hi ha dades per al projecte '{codigo_proyecto}'.")
+        print(f"❌ Error: No data found for project '{codigo_proyecto}'.")
         return
 
     output_file = f"{codigo_proyecto}_DATA.xlsx"
     
-    print("   [2/2] Creant fitxer Excel...")
+    print("   [2/2] Creating Excel file...")
     
     with pd.ExcelWriter(output_file, engine='openpyxl') as writer:
         # ---------------------------------------------------------
-        # FULLA 1: INDEX
+        # SHEET 1: INDEX
         # ---------------------------------------------------------
         df_index = df[['instance_code', 'element_code', 'instance_name', 'location']].copy()
-        df_index.columns = ['Codi Word', 'Tipus', 'Nom Real', 'Ubicació']
+        df_index.columns = ['Word Code', 'Type', 'Real Name', 'Location']
         df_index.to_excel(writer, sheet_name="INDEX_ELEMENTS", index=False)
         
         # ---------------------------------------------------------
-        # FULLA 2: MAIL MERGE (DADES HORITZONTALS)
+        # SHEET 2: MAIL MERGE (HORIZONTAL DATA)
         # ---------------------------------------------------------
         datos_merge = {}
         
-        # A) Dades del Projecte
+        # A) Project Data
         datos_merge['PROY_Nombre'] = df.iloc[0]['project_name']
         datos_merge['PROY_Codigo'] = df.iloc[0]['project_code']
 
-        # B) Dades dels Elements
+        # B) Element Data
         for index, row in df.iterrows():
-            # Netegem el codi (traiem espais i guions per a que Word no es queixi)
+            # Clean the code (remove spaces and hyphens so Word doesn't complain)
             tipo_clean = re.sub(r'[^a-zA-Z0-9]', '', str(row['element_code']))
             instancia_clean = re.sub(r'[^a-zA-Z0-9]', '_', str(row['instance_code']))
             
-            # Construïm el PREFIX CLAU:  MC01_FACH_SUR_
+            # Build the KEY PREFIX: MC01_FACH_SUR_
             prefix = f"{tipo_clean}_{instancia_clean}"
 
-            # Afegim les variables
+            # Add the variables
             datos_merge[f"{prefix}_NOM"] = row['instance_name']
             datos_merge[f"{prefix}_DESC"] = row['rendered_text'] 
             datos_merge[f"{prefix}_UBI"] = row['location']
 
-        # Creem el DataFrame horitzontal
+        # Create the horizontal DataFrame
         df_merge = pd.DataFrame([datos_merge])
         
-        # Guardem a la fulla que Word llegirà
+        # Save to the sheet that Word will read
         df_merge.to_excel(writer, sheet_name="MAIL_MERGE_DATA", index=False)
         
-    print(f"✅ ÈXIT! Fitxer generat: {output_file}")
-    print("   Ara pots connectar el Word a la fulla 'MAIL_MERGE_DATA'.")
+    print(f"✅ SUCCESS! File generated: {output_file}")
+    print("   Now you can connect Word to the 'MAIL_MERGE_DATA' sheet.")
 
-# --- EXECUCIÓ ---
+# --- EXECUTION ---
 if __name__ == "__main__":
-    # Executem per al nostre projecte de prova
+    # Execute for our test project
     exportar_excel_friendly("PROY-2025")
