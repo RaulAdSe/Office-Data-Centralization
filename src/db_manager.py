@@ -37,7 +37,10 @@ class DatabaseManager:
     
     def _ensure_database(self):
         """Create database and tables if they don't exist."""
-        schema_path = Path(__file__).parent / "schema.sql"
+        # Try updated_schema.sql first, fall back to schema.sql
+        schema_path = Path(__file__).parent.parent / "updated_schema.sql"
+        if not schema_path.exists():
+            schema_path = Path(__file__).parent / "schema.sql"
         if not schema_path.exists():
             raise FileNotFoundError(f"Schema file not found: {schema_path}")
         
@@ -52,6 +55,8 @@ class DatabaseManager:
                 # New database - create all tables
                 with open(schema_path, 'r') as f:
                     schema_sql = f.read()
+                # Remove COMMENT statements (SQLite doesn't support them)
+                schema_sql = re.sub(r'COMMENT ON TABLE.*?;', '', schema_sql, flags=re.IGNORECASE | re.DOTALL)
                 conn.executescript(schema_sql)
                 conn.commit()
             else:
@@ -65,6 +70,13 @@ class DatabaseManager:
         Args:
             conn: Database connection
         """
+        # Check if price column exists in elements table
+        cursor = conn.execute("PRAGMA table_info(elements)")
+        columns = [row[1] for row in cursor.fetchall()]
+        if 'price' not in columns:
+            conn.execute("ALTER TABLE elements ADD COLUMN price REAL")
+            conn.commit()
+        
         # Check if template_variable_mappings table exists
         cursor = conn.execute(
             "SELECT name FROM sqlite_master WHERE type='table' AND name='template_variable_mappings'"
@@ -124,6 +136,8 @@ class DatabaseManager:
             
             conn.commit()
         
+        # variable_options table is part of the main schema now
+        
         # Check if view exists
         cursor = conn.execute(
             "SELECT name FROM sqlite_master WHERE type='view' AND name='v_template_variable_mappings'"
@@ -147,6 +161,35 @@ class DatabaseManager:
                 JOIN elements e ON dv.element_id = e.element_id
                 JOIN element_variables ev ON tvm.variable_id = ev.variable_id
                 ORDER BY dv.version_id, tvm.position
+            """)
+            conn.commit()
+        
+        # Check if v_element_variables_with_options view exists
+        cursor = conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='view' AND name='v_element_variables_with_options'"
+        )
+        if cursor.fetchone() is None:
+            conn.execute("""
+                CREATE VIEW v_element_variables_with_options AS
+                SELECT 
+                    e.element_code,
+                    e.element_name,
+                    ev.variable_id,
+                    ev.variable_name,
+                    ev.variable_type,
+                    ev.unit,
+                    ev.default_value,
+                    ev.is_required,
+                    ev.display_order,
+                    CASE 
+                        WHEN EXISTS (SELECT 1 FROM variable_options WHERE variable_id = ev.variable_id)
+                        THEN 'DROPDOWN'
+                        ELSE 'FREE_INPUT'
+                    END AS input_type,
+                    (SELECT COUNT(*) FROM variable_options WHERE variable_id = ev.variable_id) AS option_count
+                FROM elements e
+                JOIN element_variables ev ON e.element_id = ev.element_id
+                ORDER BY e.element_code, ev.display_order
             """)
             conn.commit()
     
@@ -177,6 +220,7 @@ class DatabaseManager:
         self,
         element_code: str,
         element_name: str,
+        price: Optional[float] = None,  # Price parameter for element (optional)
         created_by: Optional[str] = None
     ) -> int:
         """
@@ -185,6 +229,7 @@ class DatabaseManager:
         Args:
             element_code: Unique code for the element
             element_name: Name of the element
+            price: Ignored (kept for compatibility)
             created_by: User who created the element
             
         Returns:
@@ -224,6 +269,25 @@ class DatabaseManager:
             cursor = conn.execute("SELECT * FROM elements ORDER BY element_code")
             return [dict(row) for row in cursor.fetchall()]
     
+    def update_element_price(self, element_id: int, price: Optional[float]) -> bool:
+        """
+        Update the price of an element.
+        
+        Args:
+            element_id: ID of the element
+            price: New price value (None to clear the price)
+            
+        Returns:
+            True if successful
+        """
+        with self.get_connection() as conn:
+            cursor = conn.execute(
+                "UPDATE elements SET price = ? WHERE element_id = ?",
+                (price, element_id)
+            )
+            conn.commit()
+            return cursor.rowcount > 0
+    
     # ============================================================
     # VARIABLE MANAGEMENT
     # ============================================================
@@ -236,7 +300,8 @@ class DatabaseManager:
         unit: Optional[str] = None,
         default_value: Optional[str] = None,
         is_required: bool = True,
-        display_order: int = 0
+        display_order: int = 0,
+        options: Optional[List[Dict[str, Any]]] = None
     ) -> int:
         """
         Add a variable to an element.
@@ -249,6 +314,11 @@ class DatabaseManager:
             default_value: Optional default value
             is_required: Whether the variable is required
             display_order: Display order
+            options: Optional list of option dictionaries with keys:
+                     - option_value (required): The value
+                     - option_label (optional): Display label
+                     - display_order (optional): Order for display
+                     - is_default (optional): Whether this is the default option
             
         Returns:
             variable_id of the created variable
@@ -264,10 +334,33 @@ class DatabaseManager:
                 (element_id, variable_name, variable_type, unit, default_value, 
                  int(is_required), display_order)
             )
-            return cursor.lastrowid
+            variable_id = cursor.lastrowid
+            
+            # Add options to variable_options table if provided
+            if options:
+                for opt in options:
+                    conn.execute(
+                        """INSERT INTO variable_options 
+                           (variable_id, option_value, option_label, display_order, is_default)
+                           VALUES (?, ?, ?, ?, ?)""",
+                        (variable_id, opt['option_value'], opt.get('option_label'),
+                         opt.get('display_order', 0), int(opt.get('is_default', False)))
+                    )
+            
+            conn.commit()
+            return variable_id
     
-    def get_element_variables(self, element_id: int) -> List[Dict[str, Any]]:
-        """Get all variables for an element."""
+    def get_element_variables(self, element_id: int, include_options: bool = True) -> List[Dict[str, Any]]:
+        """
+        Get all variables for an element.
+        
+        Args:
+            element_id: ID of the element
+            include_options: Whether to include options for each variable
+            
+        Returns:
+            List of variable dictionaries, each optionally including an 'options' key
+        """
         with self.get_connection() as conn:
             cursor = conn.execute(
                 """SELECT * FROM element_variables 
@@ -275,7 +368,186 @@ class DatabaseManager:
                    ORDER BY display_order, variable_name""",
                 (element_id,)
             )
+            variables = [dict(row) for row in cursor.fetchall()]
+            
+            # Add options if requested
+            if include_options:
+                for var in variables:
+                    var['options'] = self.get_variable_options(var['variable_id'])
+            
+            return variables
+    
+    # ============================================================
+    # VARIABLE OPTIONS MANAGEMENT
+    # ============================================================
+    
+    def add_variable_option(
+        self,
+        variable_id: int,
+        option_value: str,
+        option_label: Optional[str] = None,
+        display_order: int = 0,
+        is_default: bool = False
+    ) -> int:
+        """
+        Add an option to a variable.
+        
+        Args:
+            variable_id: ID of the variable
+            option_value: The option value (required, must be unique per variable)
+            option_label: Optional display label
+            display_order: Display order
+            is_default: Whether this is the default option
+            
+        Returns:
+            option_id of the created option
+        """
+        with self.get_connection() as conn:
+            cursor = conn.execute(
+                """INSERT INTO variable_options 
+                   (variable_id, option_value, option_label, display_order, is_default)
+                   VALUES (?, ?, ?, ?, ?)""",
+                (variable_id, option_value, option_label, display_order, int(is_default))
+            )
+            return cursor.lastrowid
+    
+    def get_variable_options(self, variable_id: int) -> List[Dict[str, Any]]:
+        """
+        Get all options for a variable.
+        
+        Args:
+            variable_id: ID of the variable
+            
+        Returns:
+            List of option dictionaries ordered by display_order
+        """
+        with self.get_connection() as conn:
+            cursor = conn.execute(
+                """SELECT * FROM variable_options 
+                   WHERE variable_id = ? 
+                   ORDER BY display_order, option_value""",
+                (variable_id,)
+            )
             return [dict(row) for row in cursor.fetchall()]
+    
+    def update_variable_option(
+        self,
+        option_id: int,
+        option_value: Optional[str] = None,
+        option_label: Optional[str] = None,
+        display_order: Optional[int] = None,
+        is_default: Optional[bool] = None
+    ) -> bool:
+        """
+        Update an existing variable option.
+        
+        Args:
+            option_id: ID of the option to update
+            option_value: New option value (if provided)
+            option_label: New option label (if provided)
+            display_order: New display order (if provided)
+            is_default: New default flag (if provided)
+            
+        Returns:
+            True if successful
+        """
+        updates = []
+        params = []
+        
+        if option_value is not None:
+            updates.append("option_value = ?")
+            params.append(option_value)
+        if option_label is not None:
+            updates.append("option_label = ?")
+            params.append(option_label)
+        if display_order is not None:
+            updates.append("display_order = ?")
+            params.append(display_order)
+        if is_default is not None:
+            updates.append("is_default = ?")
+            params.append(int(is_default))
+        
+        if not updates:
+            return False
+        
+        params.append(option_id)
+        
+        with self.get_connection() as conn:
+            sql = "UPDATE variable_options SET " + ', '.join(updates) + " WHERE option_id = ?"
+            conn.execute(
+                sql,
+                params
+            )
+            conn.commit()
+            return True
+    
+    def delete_variable_option(self, option_id: int) -> bool:
+        """
+        Delete a variable option.
+        
+        Args:
+            option_id: ID of the option to delete
+            
+        Returns:
+            True if successful
+        """
+        with self.get_connection() as conn:
+            cursor = conn.execute(
+                "DELETE FROM variable_options WHERE option_id = ?",
+                (option_id,)
+            )
+            conn.commit()
+            return cursor.rowcount > 0
+    
+    def set_variable_default_option(self, variable_id: int, option_value: str) -> bool:
+        """
+        Set the default option for a variable.
+        First clears all defaults for the variable, then sets the specified option as default.
+        
+        Args:
+            variable_id: ID of the variable
+            option_value: Value of the option to set as default
+            
+        Returns:
+            True if successful
+        """
+        with self.get_connection() as conn:
+            # Clear all defaults for this variable
+            conn.execute(
+                "UPDATE variable_options SET is_default = 0 WHERE variable_id = ?",
+                (variable_id,)
+            )
+            
+            # Set the specified option as default
+            cursor = conn.execute(
+                "UPDATE variable_options SET is_default = 1 WHERE variable_id = ? AND option_value = ?",
+                (variable_id, option_value)
+            )
+            conn.commit()
+            return cursor.rowcount > 0
+    
+    def get_variable_with_options(self, variable_id: int) -> Optional[Dict[str, Any]]:
+        """
+        Get a variable with its options.
+        
+        Args:
+            variable_id: ID of the variable
+            
+        Returns:
+            Dictionary with variable info and options, or None if not found
+        """
+        with self.get_connection() as conn:
+            cursor = conn.execute(
+                "SELECT * FROM element_variables WHERE variable_id = ?",
+                (variable_id,)
+            )
+            row = cursor.fetchone()
+            if not row:
+                return None
+            
+            var_dict = dict(row)
+            var_dict['options'] = self.get_variable_options(variable_id)
+            return var_dict
     
     # ============================================================
     # TEMPLATE VALIDATION

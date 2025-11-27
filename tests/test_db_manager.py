@@ -130,6 +130,151 @@ class TestVariableManagement:
         
         with pytest.raises(Exception):  # Should raise integrity error
             temp_db.add_variable(element_id, 'width', 'TEXT')
+    
+    def test_add_variable_with_options(self, temp_db):
+        """Test adding a variable with options."""
+        element_id = temp_db.create_element('TEST_ELEM', 'Test Element', created_by='test')
+        
+        options = [
+            {'option_value': 'red', 'option_label': 'Red', 'display_order': 1, 'is_default': True},
+            {'option_value': 'blue', 'option_label': 'Blue', 'display_order': 2},
+            {'option_value': 'green', 'option_label': 'Green', 'display_order': 3}
+        ]
+        
+        variable_id = temp_db.add_variable(
+            element_id=element_id,
+            variable_name='color',
+            variable_type='TEXT',
+            options=options
+        )
+        
+        assert variable_id is not None
+        
+        # Check that options were added
+        var_options = temp_db.get_variable_options(variable_id)
+        assert len(var_options) == 3
+        option_values = [opt['option_value'] for opt in var_options]
+        assert 'red' in option_values
+        assert 'blue' in option_values
+        assert 'green' in option_values
+        
+        # Check default option
+        default_opts = [opt for opt in var_options if opt['is_default']]
+        assert len(default_opts) == 1
+        assert default_opts[0]['option_value'] == 'red'
+    
+    def test_get_variable_options(self, temp_db):
+        """Test retrieving variable options."""
+        element_id = temp_db.create_element('TEST_ELEM', 'Test Element', created_by='test')
+        variable_id = temp_db.add_variable(element_id, 'material', 'TEXT')
+        
+        # Add options
+        temp_db.add_variable_option(variable_id, 'concrete', 'Concrete', display_order=1)
+        temp_db.add_variable_option(variable_id, 'steel', 'Steel', display_order=2)
+        
+        options = temp_db.get_variable_options(variable_id)
+        assert len(options) == 2
+        assert options[0]['option_value'] == 'concrete'
+        assert options[1]['option_value'] == 'steel'
+    
+    def test_get_element_variables_with_options(self, temp_db):
+        """Test retrieving element variables with their options."""
+        element_id = temp_db.create_element('TEST_ELEM', 'Test Element', created_by='test')
+        
+        # Add variable without options
+        temp_db.add_variable(element_id, 'width', 'NUMERIC', unit='cm')
+        
+        # Add variable with options
+        options = [
+            {'option_value': 'small', 'display_order': 1},
+            {'option_value': 'large', 'display_order': 2}
+        ]
+        temp_db.add_variable(element_id, 'size', 'TEXT', options=options)
+        
+        # Get variables with options
+        variables = temp_db.get_element_variables(element_id, include_options=True)
+        assert len(variables) == 2
+        
+        width_var = next(v for v in variables if v['variable_name'] == 'width')
+        size_var = next(v for v in variables if v['variable_name'] == 'size')
+        
+        assert 'options' in width_var
+        assert len(width_var['options']) == 0  # No options
+        
+        assert 'options' in size_var
+        assert len(size_var['options']) == 2
+        assert size_var['options'][0]['option_value'] == 'small'
+        assert size_var['options'][1]['option_value'] == 'large'
+    
+    def test_update_variable_option(self, temp_db):
+        """Test updating a variable option."""
+        element_id = temp_db.create_element('TEST_ELEM', 'Test Element', created_by='test')
+        variable_id = temp_db.add_variable(element_id, 'color', 'TEXT')
+        option_id = temp_db.add_variable_option(variable_id, 'red', 'Red')
+        
+        # Update option
+        temp_db.update_variable_option(option_id, option_label='Rojo', is_default=True)
+        
+        options = temp_db.get_variable_options(variable_id)
+        updated_opt = next(opt for opt in options if opt['option_id'] == option_id)
+        assert updated_opt['option_label'] == 'Rojo'
+        assert updated_opt['is_default'] == 1
+    
+    def test_delete_variable_option(self, temp_db):
+        """Test deleting a variable option."""
+        element_id = temp_db.create_element('TEST_ELEM', 'Test Element', created_by='test')
+        variable_id = temp_db.add_variable(element_id, 'color', 'TEXT')
+        option_id = temp_db.add_variable_option(variable_id, 'red', 'Red')
+        
+        # Delete option
+        result = temp_db.delete_variable_option(option_id)
+        assert result is True
+        
+        options = temp_db.get_variable_options(variable_id)
+        assert len(options) == 0
+    
+    def test_set_variable_default_option(self, temp_db):
+        """Test setting default option for a variable."""
+        element_id = temp_db.create_element('TEST_ELEM', 'Test Element', created_by='test')
+        variable_id = temp_db.add_variable(element_id, 'color', 'TEXT')
+        
+        temp_db.add_variable_option(variable_id, 'red', 'Red', is_default=True)
+        temp_db.add_variable_option(variable_id, 'blue', 'Blue')
+        
+        # Change default to blue
+        result = temp_db.set_variable_default_option(variable_id, 'blue')
+        assert result is True
+        
+        options = temp_db.get_variable_options(variable_id)
+        red_opt = next(opt for opt in options if opt['option_value'] == 'red')
+        blue_opt = next(opt for opt in options if opt['option_value'] == 'blue')
+        
+        assert red_opt['is_default'] == 0
+        assert blue_opt['is_default'] == 1
+    
+    def test_get_variable_with_options(self, temp_db):
+        """Test getting a variable with its options."""
+        element_id = temp_db.create_element('TEST_ELEM', 'Test Element', created_by='test')
+        variable_id = temp_db.add_variable(element_id, 'material', 'TEXT')
+        
+        temp_db.add_variable_option(variable_id, 'concrete', 'Concrete')
+        temp_db.add_variable_option(variable_id, 'steel', 'Steel')
+        
+        var = temp_db.get_variable_with_options(variable_id)
+        assert var is not None
+        assert var['variable_name'] == 'material'
+        assert len(var['options']) == 2
+        assert 'options' in var
+    
+    def test_duplicate_option_value(self, temp_db):
+        """Test that duplicate option values are rejected for the same variable."""
+        element_id = temp_db.create_element('TEST_ELEM', 'Test Element', created_by='test')
+        variable_id = temp_db.add_variable(element_id, 'color', 'TEXT')
+        
+        temp_db.add_variable_option(variable_id, 'red', 'Red')
+        
+        with pytest.raises(Exception):  # Should raise integrity error
+            temp_db.add_variable_option(variable_id, 'red', 'Rojo')
 
 
 class TestTemplateValidation:

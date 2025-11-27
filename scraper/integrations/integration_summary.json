@@ -1,0 +1,1451 @@
+{
+  "integration_summary": {
+    "scraped_count": 2,
+    "integrated_count": 2,
+    "errors": [],
+    "element_codes": [
+      "RME030",
+      "EHV015"
+    ]
+  },
+  "database_elements": [
+    {
+      "code": "RME030",
+      "element_info": {
+        "element_id": 1,
+        "element_code": "RME030",
+        "element_name": "ESMALTE AL AGUA PARA MADERA",
+        "created_at": "2025-11-25 15:30:07",
+        "created_by": "demo_user"
+      },
+      "variables": [
+        {
+          "variable_id": 6,
+          "element_id": 1,
+          "variable_name": "aplicacion_imprimacion",
+          "variable_type": "TEXT",
+          "unit": null,
+          "default_value": "Imprimación selladora",
+          "is_required": 1,
+          "display_order": 0,
+          "created_at": "2025-11-25 15:30:07",
+          "options": [
+            {
+              "option_id": 14,
+              "variable_id": 6,
+              "option_value": "imprimacion_selladora",
+              "option_label": "Imprimación selladora",
+              "display_order": 1,
+              "is_default": 1,
+              "created_at": "2025-11-25 15:30:07"
+            }
+          ]
+        },
+        {
+          "variable_id": 4,
+          "element_id": 1,
+          "variable_name": "color",
+          "variable_type": "TEXT",
+          "unit": null,
+          "default_value": "Color blanco",
+          "is_required": 1,
+          "display_order": 0,
+          "created_at": "2025-11-25 15:30:07",
+          "options": [
+            {
+              "option_id": 9,
+              "variable_id": 4,
+              "option_value": "white",
+              "option_label": "Color blanco",
+              "display_order": 1,
+              "is_default": 1,
+              "created_at": "2025-11-25 15:30:07"
+            },
+            {
+              "option_id": 10,
+              "variable_id": 4,
+              "option_value": "custom_color",
+              "option_label": "Color a elegir",
+              "display_order": 2,
+              "is_default": 0,
+              "created_at": "2025-11-25 15:30:07"
+            }
+          ]
+        },
+        {
+          "variable_id": 2,
+          "element_id": 1,
+          "variable_name": "nivel_transito",
+          "variable_type": "TEXT",
+          "unit": null,
+          "default_value": "Medio",
+          "is_required": 1,
+          "display_order": 0,
+          "created_at": "2025-11-25 15:30:07",
+          "options": [
+            {
+              "option_id": 3,
+              "variable_id": 2,
+              "option_value": "minimum",
+              "option_label": "Mínimo",
+              "display_order": 1,
+              "is_default": 0,
+              "created_at": "2025-11-25 15:30:07"
+            },
+            {
+              "option_id": 4,
+              "variable_id": 2,
+              "option_value": "medium",
+              "option_label": "Medio",
+              "display_order": 2,
+              "is_default": 1,
+              "created_at": "2025-11-25 15:30:07"
+            },
+            {
+              "option_id": 5,
+              "variable_id": 2,
+              "option_value": "maximum",
+              "option_label": "Máximo",
+              "display_order": 3,
+              "is_default": 0,
+              "created_at": "2025-11-25 15:30:07"
+            }
+          ]
+        },
+        {
+          "variable_id": 7,
+          "element_id": 1,
+          "variable_name": "numero_manos",
+          "variable_type": "TEXT",
+          "unit": null,
+          "default_value": "Dos manos",
+          "is_required": 1,
+          "display_order": 0,
+          "created_at": "2025-11-25 15:30:07",
+          "options": [
+            {
+              "option_id": 15,
+              "variable_id": 7,
+              "option_value": "una_mano",
+              "option_label": "Una mano",
+              "display_order": 1,
+              "is_default": 0,
+              "created_at": "2025-11-25 15:30:07"
+            },
+            {
+              "option_id": 16,
+              "variable_id": 7,
+              "option_value": "dos_manos",
+              "option_label": "Dos manos",
+              "display_order": 2,
+              "is_default": 1,
+              "created_at": "2025-11-25 15:30:07"
+            }
+          ]
+        },
+        {
+          "variable_id": 9,
+          "element_id": 1,
+          "variable_name": "opcion_1",
+          "variable_type": "TEXT",
+          "unit": null,
+          "default_value": null,
+          "is_required": 0,
+          "display_order": 0,
+          "created_at": "2025-11-25 15:30:07",
+          "options": [
+            {
+              "option_id": 18,
+              "variable_id": 9,
+              "option_value": "reaccion_al_fuego_segun_uneen_135011",
+              "option_label": "Reacción al fuego, según UNE-EN 13501-1",
+              "display_order": 1,
+              "is_default": 0,
+              "created_at": "2025-11-25 15:30:07"
+            }
+          ]
+        },
+        {
+          "variable_id": 10,
+          "element_id": 1,
+          "variable_name": "opcion_2",
+          "variable_type": "TEXT",
+          "unit": null,
+          "default_value": null,
+          "is_required": 0,
+          "display_order": 0,
+          "created_at": "2025-11-25 15:30:07",
+          "options": [
+            {
+              "option_id": 19,
+              "variable_id": 10,
+              "option_value": "con_un_contenido_de_sustancias_organicas_volatiles",
+              "option_label": "Con un contenido de sustancias orgánicas volátiles (VOC) < 140 g/l",
+              "display_order": 1,
+              "is_default": 0,
+              "created_at": "2025-11-25 15:30:07"
+            }
+          ]
+        },
+        {
+          "variable_id": 5,
+          "element_id": 1,
+          "variable_name": "tipo_acabado",
+          "variable_type": "TEXT",
+          "unit": null,
+          "default_value": "Brillante",
+          "is_required": 1,
+          "display_order": 0,
+          "created_at": "2025-11-25 15:30:07",
+          "options": [
+            {
+              "option_id": 11,
+              "variable_id": 5,
+              "option_value": "gloss",
+              "option_label": "Brillante",
+              "display_order": 1,
+              "is_default": 1,
+              "created_at": "2025-11-25 15:30:07"
+            },
+            {
+              "option_id": 12,
+              "variable_id": 5,
+              "option_value": "satin",
+              "option_label": "Satinado",
+              "display_order": 2,
+              "is_default": 0,
+              "created_at": "2025-11-25 15:30:07"
+            },
+            {
+              "option_id": 13,
+              "variable_id": 5,
+              "option_value": "matte",
+              "option_label": "Mate",
+              "display_order": 3,
+              "is_default": 0,
+              "created_at": "2025-11-25 15:30:07"
+            }
+          ]
+        },
+        {
+          "variable_id": 3,
+          "element_id": 1,
+          "variable_name": "tipo_elemento",
+          "variable_type": "TEXT",
+          "unit": null,
+          "default_value": "Barandillas o pasamanos",
+          "is_required": 1,
+          "display_order": 0,
+          "created_at": "2025-11-25 15:30:07",
+          "options": [
+            {
+              "option_id": 6,
+              "variable_id": 3,
+              "option_value": "railings",
+              "option_label": "Barandillas o pasamanos",
+              "display_order": 1,
+              "is_default": 1,
+              "created_at": "2025-11-25 15:30:07"
+            },
+            {
+              "option_id": 7,
+              "variable_id": 3,
+              "option_value": "furniture",
+              "option_label": "Mobiliario",
+              "display_order": 2,
+              "is_default": 0,
+              "created_at": "2025-11-25 15:30:07"
+            },
+            {
+              "option_id": 8,
+              "variable_id": 3,
+              "option_value": "carpentry",
+              "option_label": "Carpintería",
+              "display_order": 3,
+              "is_default": 0,
+              "created_at": "2025-11-25 15:30:07"
+            }
+          ]
+        },
+        {
+          "variable_id": 8,
+          "element_id": 1,
+          "variable_name": "tipo_material",
+          "variable_type": "TEXT",
+          "unit": null,
+          "default_value": "Esmalte al agua",
+          "is_required": 1,
+          "display_order": 0,
+          "created_at": "2025-11-25 15:30:07",
+          "options": [
+            {
+              "option_id": 17,
+              "variable_id": 8,
+              "option_value": "esmalte_al_agua",
+              "option_label": "Esmalte al agua",
+              "display_order": 1,
+              "is_default": 1,
+              "created_at": "2025-11-25 15:30:07"
+            }
+          ]
+        },
+        {
+          "variable_id": 1,
+          "element_id": 1,
+          "variable_name": "ubicacion_aplicacion",
+          "variable_type": "TEXT",
+          "unit": null,
+          "default_value": "Interior",
+          "is_required": 1,
+          "display_order": 0,
+          "created_at": "2025-11-25 15:30:07",
+          "options": [
+            {
+              "option_id": 1,
+              "variable_id": 1,
+              "option_value": "interior",
+              "option_label": "Interior",
+              "display_order": 1,
+              "is_default": 1,
+              "created_at": "2025-11-25 15:30:07"
+            },
+            {
+              "option_id": 2,
+              "variable_id": 1,
+              "option_value": "exterior",
+              "option_label": "Exterior",
+              "display_order": 2,
+              "is_default": 0,
+              "created_at": "2025-11-25 15:30:07"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "EHV015",
+      "element_info": {
+        "element_id": 2,
+        "element_code": "EHV015",
+        "element_name": "VIGA EXENTA DE HORMIGÓN VISTO",
+        "created_at": "2025-11-25 15:30:07",
+        "created_by": "demo_user"
+      },
+      "variables": [
+        {
+          "variable_id": 22,
+          "element_id": 2,
+          "variable_name": "altura_libre",
+          "variable_type": "TEXT",
+          "unit": null,
+          "default_value": "Hasta 3 m",
+          "is_required": 1,
+          "display_order": 0,
+          "created_at": "2025-11-25 15:30:07",
+          "options": [
+            {
+              "option_id": 39,
+              "variable_id": 22,
+              "option_value": "hasta_3_m",
+              "option_label": "Hasta 3 m",
+              "display_order": 1,
+              "is_default": 1,
+              "created_at": "2025-11-25 15:30:07"
+            },
+            {
+              "option_id": 40,
+              "variable_id": 22,
+              "option_value": "entre_3_y_4_m",
+              "option_label": "Entre 3 y 4 m",
+              "display_order": 2,
+              "is_default": 0,
+              "created_at": "2025-11-25 15:30:07"
+            },
+            {
+              "option_id": 41,
+              "variable_id": 22,
+              "option_value": "entre_4_y_5_m",
+              "option_label": "Entre 4 y 5 m",
+              "display_order": 3,
+              "is_default": 0,
+              "created_at": "2025-11-25 15:30:07"
+            }
+          ]
+        },
+        {
+          "variable_id": 20,
+          "element_id": 2,
+          "variable_name": "clase_exposicion",
+          "variable_type": "TEXT",
+          "unit": null,
+          "default_value": "XC2",
+          "is_required": 1,
+          "display_order": 0,
+          "created_at": "2025-11-25 15:30:07",
+          "options": [
+            {
+              "option_id": 24,
+              "variable_id": 20,
+              "option_value": "x0",
+              "option_label": "X0",
+              "display_order": 1,
+              "is_default": 0,
+              "created_at": "2025-11-25 15:30:07"
+            },
+            {
+              "option_id": 25,
+              "variable_id": 20,
+              "option_value": "xc4",
+              "option_label": "XC4",
+              "display_order": 2,
+              "is_default": 0,
+              "created_at": "2025-11-25 15:30:07"
+            },
+            {
+              "option_id": 26,
+              "variable_id": 20,
+              "option_value": "xs1",
+              "option_label": "XS1",
+              "display_order": 3,
+              "is_default": 0,
+              "created_at": "2025-11-25 15:30:07"
+            },
+            {
+              "option_id": 27,
+              "variable_id": 20,
+              "option_value": "xc1",
+              "option_label": "XC1",
+              "display_order": 4,
+              "is_default": 0,
+              "created_at": "2025-11-25 15:30:07"
+            },
+            {
+              "option_id": 28,
+              "variable_id": 20,
+              "option_value": "xd1",
+              "option_label": "XD1",
+              "display_order": 5,
+              "is_default": 0,
+              "created_at": "2025-11-25 15:30:07"
+            },
+            {
+              "option_id": 29,
+              "variable_id": 20,
+              "option_value": "xs2",
+              "option_label": "XS2",
+              "display_order": 6,
+              "is_default": 0,
+              "created_at": "2025-11-25 15:30:07"
+            },
+            {
+              "option_id": 30,
+              "variable_id": 20,
+              "option_value": "xc2",
+              "option_label": "XC2",
+              "display_order": 7,
+              "is_default": 1,
+              "created_at": "2025-11-25 15:30:07"
+            },
+            {
+              "option_id": 31,
+              "variable_id": 20,
+              "option_value": "xd2",
+              "option_label": "XD2",
+              "display_order": 8,
+              "is_default": 0,
+              "created_at": "2025-11-25 15:30:07"
+            },
+            {
+              "option_id": 32,
+              "variable_id": 20,
+              "option_value": "xs3",
+              "option_label": "XS3",
+              "display_order": 9,
+              "is_default": 0,
+              "created_at": "2025-11-25 15:30:07"
+            },
+            {
+              "option_id": 33,
+              "variable_id": 20,
+              "option_value": "xc3",
+              "option_label": "XC3",
+              "display_order": 10,
+              "is_default": 0,
+              "created_at": "2025-11-25 15:30:07"
+            },
+            {
+              "option_id": 34,
+              "variable_id": 20,
+              "option_value": "xd3",
+              "option_label": "XD3",
+              "display_order": 11,
+              "is_default": 0,
+              "created_at": "2025-11-25 15:30:07"
+            }
+          ]
+        },
+        {
+          "variable_id": 11,
+          "element_id": 2,
+          "variable_name": "dimension_1",
+          "variable_type": "TEXT",
+          "unit": null,
+          "default_value": "40",
+          "is_required": 1,
+          "display_order": 0,
+          "created_at": "2025-11-25 15:30:07",
+          "options": []
+        },
+        {
+          "variable_id": 12,
+          "element_id": 2,
+          "variable_name": "dimension_2",
+          "variable_type": "TEXT",
+          "unit": null,
+          "default_value": "60",
+          "is_required": 1,
+          "display_order": 0,
+          "created_at": "2025-11-25 15:30:07",
+          "options": []
+        },
+        {
+          "variable_id": 13,
+          "element_id": 2,
+          "variable_name": "dimension_3",
+          "variable_type": "TEXT",
+          "unit": null,
+          "default_value": "5",
+          "is_required": 1,
+          "display_order": 0,
+          "created_at": "2025-11-25 15:30:07",
+          "options": []
+        },
+        {
+          "variable_id": 14,
+          "element_id": 2,
+          "variable_name": "dimension_5",
+          "variable_type": "TEXT",
+          "unit": null,
+          "default_value": "4",
+          "is_required": 1,
+          "display_order": 0,
+          "created_at": "2025-11-25 15:30:07",
+          "options": []
+        },
+        {
+          "variable_id": 15,
+          "element_id": 2,
+          "variable_name": "dimension_6",
+          "variable_type": "TEXT",
+          "unit": null,
+          "default_value": "20",
+          "is_required": 1,
+          "display_order": 0,
+          "created_at": "2025-11-25 15:30:07",
+          "options": []
+        },
+        {
+          "variable_id": 16,
+          "element_id": 2,
+          "variable_name": "dimension_7",
+          "variable_type": "TEXT",
+          "unit": null,
+          "default_value": "150",
+          "is_required": 1,
+          "display_order": 0,
+          "created_at": "2025-11-25 15:30:07",
+          "options": []
+        },
+        {
+          "variable_id": 17,
+          "element_id": 2,
+          "variable_name": "dimension_9",
+          "variable_type": "TEXT",
+          "unit": null,
+          "default_value": "150",
+          "is_required": 1,
+          "display_order": 0,
+          "created_at": "2025-11-25 15:30:07",
+          "options": []
+        },
+        {
+          "variable_id": 19,
+          "element_id": 2,
+          "variable_name": "metodo_vertido",
+          "variable_type": "TEXT",
+          "unit": null,
+          "default_value": "Con cubilote",
+          "is_required": 1,
+          "display_order": 0,
+          "created_at": "2025-11-25 15:30:07",
+          "options": [
+            {
+              "option_id": 22,
+              "variable_id": 19,
+              "option_value": "bucket_pour",
+              "option_label": "Con cubilote",
+              "display_order": 1,
+              "is_default": 1,
+              "created_at": "2025-11-25 15:30:07"
+            },
+            {
+              "option_id": 23,
+              "variable_id": 19,
+              "option_value": "pump_pour",
+              "option_label": "Con bomba",
+              "display_order": 2,
+              "is_default": 0,
+              "created_at": "2025-11-25 15:30:07"
+            }
+          ]
+        },
+        {
+          "variable_id": 55,
+          "element_id": 2,
+          "variable_name": "opcion_1",
+          "variable_type": "TEXT",
+          "unit": null,
+          "default_value": null,
+          "is_required": 0,
+          "display_order": 0,
+          "created_at": "2025-11-25 15:30:07",
+          "options": [
+            {
+              "option_id": 76,
+              "variable_id": 55,
+              "option_value": "adicion_de_fibras_de_refuerzo_sin_funcion_estructu",
+              "option_label": "Adición de fibras de refuerzo sin función estructural",
+              "display_order": 1,
+              "is_default": 0,
+              "created_at": "2025-11-25 15:30:07"
+            }
+          ]
+        },
+        {
+          "variable_id": 56,
+          "element_id": 2,
+          "variable_name": "opcion_2",
+          "variable_type": "TEXT",
+          "unit": null,
+          "default_value": null,
+          "is_required": 0,
+          "display_order": 0,
+          "created_at": "2025-11-25 15:30:07",
+          "options": [
+            {
+              "option_id": 77,
+              "variable_id": 56,
+              "option_value": "con_sistema_de_encofrado",
+              "option_label": "Con sistema de encofrado",
+              "display_order": 1,
+              "is_default": 0,
+              "created_at": "2025-11-25 15:30:07"
+            }
+          ]
+        },
+        {
+          "variable_id": 24,
+          "element_id": 2,
+          "variable_name": "opcion_adicional_m_16",
+          "variable_type": "TEXT",
+          "unit": null,
+          "default_value": null,
+          "is_required": 1,
+          "display_order": 0,
+          "created_at": "2025-11-25 15:30:07",
+          "options": [
+            {
+              "option_id": 45,
+              "variable_id": 24,
+              "option_value": "xf1",
+              "option_label": "XF1",
+              "display_order": 1,
+              "is_default": 0,
+              "created_at": "2025-11-25 15:30:07"
+            }
+          ]
+        },
+        {
+          "variable_id": 25,
+          "element_id": 2,
+          "variable_name": "opcion_adicional_m_17",
+          "variable_type": "TEXT",
+          "unit": null,
+          "default_value": null,
+          "is_required": 1,
+          "display_order": 0,
+          "created_at": "2025-11-25 15:30:07",
+          "options": [
+            {
+              "option_id": 46,
+              "variable_id": 25,
+              "option_value": "xf2",
+              "option_label": "XF2",
+              "display_order": 1,
+              "is_default": 0,
+              "created_at": "2025-11-25 15:30:07"
+            }
+          ]
+        },
+        {
+          "variable_id": 26,
+          "element_id": 2,
+          "variable_name": "opcion_adicional_m_18",
+          "variable_type": "TEXT",
+          "unit": null,
+          "default_value": null,
+          "is_required": 1,
+          "display_order": 0,
+          "created_at": "2025-11-25 15:30:07",
+          "options": [
+            {
+              "option_id": 47,
+              "variable_id": 26,
+              "option_value": "xf3",
+              "option_label": "XF3",
+              "display_order": 1,
+              "is_default": 0,
+              "created_at": "2025-11-25 15:30:07"
+            }
+          ]
+        },
+        {
+          "variable_id": 27,
+          "element_id": 2,
+          "variable_name": "opcion_adicional_m_19",
+          "variable_type": "TEXT",
+          "unit": null,
+          "default_value": null,
+          "is_required": 1,
+          "display_order": 0,
+          "created_at": "2025-11-25 15:30:07",
+          "options": [
+            {
+              "option_id": 48,
+              "variable_id": 27,
+              "option_value": "xf4",
+              "option_label": "XF4",
+              "display_order": 1,
+              "is_default": 0,
+              "created_at": "2025-11-25 15:30:07"
+            }
+          ]
+        },
+        {
+          "variable_id": 28,
+          "element_id": 2,
+          "variable_name": "opcion_adicional_m_20",
+          "variable_type": "TEXT",
+          "unit": null,
+          "default_value": "Ninguno",
+          "is_required": 1,
+          "display_order": 0,
+          "created_at": "2025-11-25 15:30:07",
+          "options": [
+            {
+              "option_id": 49,
+              "variable_id": 28,
+              "option_value": "ninguno",
+              "option_label": "Ninguno",
+              "display_order": 1,
+              "is_default": 1,
+              "created_at": "2025-11-25 15:30:07"
+            }
+          ]
+        },
+        {
+          "variable_id": 29,
+          "element_id": 2,
+          "variable_name": "opcion_adicional_m_21",
+          "variable_type": "TEXT",
+          "unit": null,
+          "default_value": null,
+          "is_required": 1,
+          "display_order": 0,
+          "created_at": "2025-11-25 15:30:07",
+          "options": [
+            {
+              "option_id": 50,
+              "variable_id": 29,
+              "option_value": "xa1",
+              "option_label": "XA1",
+              "display_order": 1,
+              "is_default": 0,
+              "created_at": "2025-11-25 15:30:07"
+            }
+          ]
+        },
+        {
+          "variable_id": 30,
+          "element_id": 2,
+          "variable_name": "opcion_adicional_m_22",
+          "variable_type": "TEXT",
+          "unit": null,
+          "default_value": null,
+          "is_required": 1,
+          "display_order": 0,
+          "created_at": "2025-11-25 15:30:07",
+          "options": [
+            {
+              "option_id": 51,
+              "variable_id": 30,
+              "option_value": "xa2",
+              "option_label": "XA2",
+              "display_order": 1,
+              "is_default": 0,
+              "created_at": "2025-11-25 15:30:07"
+            }
+          ]
+        },
+        {
+          "variable_id": 31,
+          "element_id": 2,
+          "variable_name": "opcion_adicional_m_23",
+          "variable_type": "TEXT",
+          "unit": null,
+          "default_value": null,
+          "is_required": 1,
+          "display_order": 0,
+          "created_at": "2025-11-25 15:30:07",
+          "options": [
+            {
+              "option_id": 52,
+              "variable_id": 31,
+              "option_value": "xa3",
+              "option_label": "XA3",
+              "display_order": 1,
+              "is_default": 0,
+              "created_at": "2025-11-25 15:30:07"
+            }
+          ]
+        },
+        {
+          "variable_id": 32,
+          "element_id": 2,
+          "variable_name": "opcion_adicional_m_24",
+          "variable_type": "TEXT",
+          "unit": null,
+          "default_value": "Ninguno",
+          "is_required": 1,
+          "display_order": 0,
+          "created_at": "2025-11-25 15:30:07",
+          "options": [
+            {
+              "option_id": 53,
+              "variable_id": 32,
+              "option_value": "ninguno",
+              "option_label": "Ninguno",
+              "display_order": 1,
+              "is_default": 1,
+              "created_at": "2025-11-25 15:30:07"
+            }
+          ]
+        },
+        {
+          "variable_id": 33,
+          "element_id": 2,
+          "variable_name": "opcion_adicional_m_25",
+          "variable_type": "TEXT",
+          "unit": null,
+          "default_value": null,
+          "is_required": 1,
+          "display_order": 0,
+          "created_at": "2025-11-25 15:30:07",
+          "options": [
+            {
+              "option_id": 54,
+              "variable_id": 33,
+              "option_value": "xm1",
+              "option_label": "XM1",
+              "display_order": 1,
+              "is_default": 0,
+              "created_at": "2025-11-25 15:30:07"
+            }
+          ]
+        },
+        {
+          "variable_id": 34,
+          "element_id": 2,
+          "variable_name": "opcion_adicional_m_26",
+          "variable_type": "TEXT",
+          "unit": null,
+          "default_value": null,
+          "is_required": 1,
+          "display_order": 0,
+          "created_at": "2025-11-25 15:30:07",
+          "options": [
+            {
+              "option_id": 55,
+              "variable_id": 34,
+              "option_value": "xm2",
+              "option_label": "XM2",
+              "display_order": 1,
+              "is_default": 0,
+              "created_at": "2025-11-25 15:30:07"
+            }
+          ]
+        },
+        {
+          "variable_id": 35,
+          "element_id": 2,
+          "variable_name": "opcion_adicional_m_27",
+          "variable_type": "TEXT",
+          "unit": null,
+          "default_value": null,
+          "is_required": 1,
+          "display_order": 0,
+          "created_at": "2025-11-25 15:30:07",
+          "options": [
+            {
+              "option_id": 56,
+              "variable_id": 35,
+              "option_value": "xm3",
+              "option_label": "XM3",
+              "display_order": 1,
+              "is_default": 0,
+              "created_at": "2025-11-25 15:30:07"
+            }
+          ]
+        },
+        {
+          "variable_id": 36,
+          "element_id": 2,
+          "variable_name": "opcion_adicional_m_28",
+          "variable_type": "TEXT",
+          "unit": null,
+          "default_value": "Ninguno",
+          "is_required": 1,
+          "display_order": 0,
+          "created_at": "2025-11-25 15:30:07",
+          "options": [
+            {
+              "option_id": 57,
+              "variable_id": 36,
+              "option_value": "ninguno",
+              "option_label": "Ninguno",
+              "display_order": 1,
+              "is_default": 1,
+              "created_at": "2025-11-25 15:30:07"
+            }
+          ]
+        },
+        {
+          "variable_id": 37,
+          "element_id": 2,
+          "variable_name": "opcion_adicional_m_29",
+          "variable_type": "TEXT",
+          "unit": null,
+          "default_value": "25",
+          "is_required": 1,
+          "display_order": 0,
+          "created_at": "2025-11-25 15:30:07",
+          "options": [
+            {
+              "option_id": 58,
+              "variable_id": 37,
+              "option_value": "25",
+              "option_label": "25",
+              "display_order": 1,
+              "is_default": 1,
+              "created_at": "2025-11-25 15:30:07"
+            }
+          ]
+        },
+        {
+          "variable_id": 38,
+          "element_id": 2,
+          "variable_name": "opcion_adicional_m_30",
+          "variable_type": "TEXT",
+          "unit": null,
+          "default_value": null,
+          "is_required": 1,
+          "display_order": 0,
+          "created_at": "2025-11-25 15:30:07",
+          "options": [
+            {
+              "option_id": 59,
+              "variable_id": 38,
+              "option_value": "30",
+              "option_label": "30",
+              "display_order": 1,
+              "is_default": 0,
+              "created_at": "2025-11-25 15:30:07"
+            }
+          ]
+        },
+        {
+          "variable_id": 39,
+          "element_id": 2,
+          "variable_name": "opcion_adicional_m_31",
+          "variable_type": "TEXT",
+          "unit": null,
+          "default_value": null,
+          "is_required": 1,
+          "display_order": 0,
+          "created_at": "2025-11-25 15:30:07",
+          "options": [
+            {
+              "option_id": 60,
+              "variable_id": 39,
+              "option_value": "35",
+              "option_label": "35",
+              "display_order": 1,
+              "is_default": 0,
+              "created_at": "2025-11-25 15:30:07"
+            }
+          ]
+        },
+        {
+          "variable_id": 40,
+          "element_id": 2,
+          "variable_name": "opcion_adicional_m_32",
+          "variable_type": "TEXT",
+          "unit": null,
+          "default_value": null,
+          "is_required": 1,
+          "display_order": 0,
+          "created_at": "2025-11-25 15:30:07",
+          "options": [
+            {
+              "option_id": 61,
+              "variable_id": 40,
+              "option_value": "40",
+              "option_label": "40",
+              "display_order": 1,
+              "is_default": 0,
+              "created_at": "2025-11-25 15:30:07"
+            }
+          ]
+        },
+        {
+          "variable_id": 41,
+          "element_id": 2,
+          "variable_name": "opcion_adicional_m_33",
+          "variable_type": "TEXT",
+          "unit": null,
+          "default_value": null,
+          "is_required": 1,
+          "display_order": 0,
+          "created_at": "2025-11-25 15:30:07",
+          "options": [
+            {
+              "option_id": 62,
+              "variable_id": 41,
+              "option_value": "12",
+              "option_label": "12",
+              "display_order": 1,
+              "is_default": 0,
+              "created_at": "2025-11-25 15:30:07"
+            }
+          ]
+        },
+        {
+          "variable_id": 42,
+          "element_id": 2,
+          "variable_name": "opcion_adicional_m_34",
+          "variable_type": "TEXT",
+          "unit": null,
+          "default_value": "20",
+          "is_required": 1,
+          "display_order": 0,
+          "created_at": "2025-11-25 15:30:07",
+          "options": [
+            {
+              "option_id": 63,
+              "variable_id": 42,
+              "option_value": "20",
+              "option_label": "20",
+              "display_order": 1,
+              "is_default": 1,
+              "created_at": "2025-11-25 15:30:07"
+            }
+          ]
+        },
+        {
+          "variable_id": 43,
+          "element_id": 2,
+          "variable_name": "opcion_adicional_m_35",
+          "variable_type": "TEXT",
+          "unit": null,
+          "default_value": "Fluida",
+          "is_required": 1,
+          "display_order": 0,
+          "created_at": "2025-11-25 15:30:07",
+          "options": [
+            {
+              "option_id": 64,
+              "variable_id": 43,
+              "option_value": "fluida",
+              "option_label": "Fluida",
+              "display_order": 1,
+              "is_default": 1,
+              "created_at": "2025-11-25 15:30:07"
+            }
+          ]
+        },
+        {
+          "variable_id": 44,
+          "element_id": 2,
+          "variable_name": "opcion_adicional_m_36",
+          "variable_type": "TEXT",
+          "unit": null,
+          "default_value": null,
+          "is_required": 1,
+          "display_order": 0,
+          "created_at": "2025-11-25 15:30:07",
+          "options": [
+            {
+              "option_id": 65,
+              "variable_id": 44,
+              "option_value": "blanda",
+              "option_label": "Blanda",
+              "display_order": 1,
+              "is_default": 0,
+              "created_at": "2025-11-25 15:30:07"
+            }
+          ]
+        },
+        {
+          "variable_id": 45,
+          "element_id": 2,
+          "variable_name": "opcion_adicional_m_37",
+          "variable_type": "TEXT",
+          "unit": null,
+          "default_value": null,
+          "is_required": 1,
+          "display_order": 0,
+          "created_at": "2025-11-25 15:30:07",
+          "options": [
+            {
+              "option_id": 66,
+              "variable_id": 45,
+              "option_value": "plastica",
+              "option_label": "Plástica",
+              "display_order": 1,
+              "is_default": 0,
+              "created_at": "2025-11-25 15:30:07"
+            }
+          ]
+        },
+        {
+          "variable_id": 46,
+          "element_id": 2,
+          "variable_name": "opcion_adicional_m_38",
+          "variable_type": "TEXT",
+          "unit": null,
+          "default_value": "No",
+          "is_required": 1,
+          "display_order": 0,
+          "created_at": "2025-11-25 15:30:07",
+          "options": [
+            {
+              "option_id": 67,
+              "variable_id": 46,
+              "option_value": "no",
+              "option_label": "No",
+              "display_order": 1,
+              "is_default": 1,
+              "created_at": "2025-11-25 15:30:07"
+            }
+          ]
+        },
+        {
+          "variable_id": 47,
+          "element_id": 2,
+          "variable_name": "opcion_adicional_m_39",
+          "variable_type": "TEXT",
+          "unit": null,
+          "default_value": null,
+          "is_required": 1,
+          "display_order": 0,
+          "created_at": "2025-11-25 15:30:07",
+          "options": [
+            {
+              "option_id": 68,
+              "variable_id": 47,
+              "option_value": "si",
+              "option_label": "Sí",
+              "display_order": 1,
+              "is_default": 0,
+              "created_at": "2025-11-25 15:30:07"
+            }
+          ]
+        },
+        {
+          "variable_id": 48,
+          "element_id": 2,
+          "variable_name": "opcion_adicional_m_40",
+          "variable_type": "TEXT",
+          "unit": null,
+          "default_value": "Unknown Option",
+          "is_required": 1,
+          "display_order": 0,
+          "created_at": "2025-11-25 15:30:07",
+          "options": [
+            {
+              "option_id": 69,
+              "variable_id": 48,
+              "option_value": "unknown_option",
+              "option_label": "Unknown Option",
+              "display_order": 1,
+              "is_default": 1,
+              "created_at": "2025-11-25 15:30:07"
+            }
+          ]
+        },
+        {
+          "variable_id": 49,
+          "element_id": 2,
+          "variable_name": "opcion_adicional_m_41",
+          "variable_type": "TEXT",
+          "unit": null,
+          "default_value": null,
+          "is_required": 1,
+          "display_order": 0,
+          "created_at": "2025-11-25 15:30:07",
+          "options": [
+            {
+              "option_id": 70,
+              "variable_id": 49,
+              "option_value": "unknown_option",
+              "option_label": "Unknown Option",
+              "display_order": 1,
+              "is_default": 0,
+              "created_at": "2025-11-25 15:30:07"
+            }
+          ]
+        },
+        {
+          "variable_id": 50,
+          "element_id": 2,
+          "variable_name": "opcion_adicional_m_52",
+          "variable_type": "TEXT",
+          "unit": null,
+          "default_value": "Visto con textura lisa",
+          "is_required": 1,
+          "display_order": 0,
+          "created_at": "2025-11-25 15:30:07",
+          "options": [
+            {
+              "option_id": 71,
+              "variable_id": 50,
+              "option_value": "visto_con_textura_lisa",
+              "option_label": "Visto con textura lisa",
+              "display_order": 1,
+              "is_default": 1,
+              "created_at": "2025-11-25 15:30:07"
+            }
+          ]
+        },
+        {
+          "variable_id": 51,
+          "element_id": 2,
+          "variable_name": "opcion_adicional_m_53",
+          "variable_type": "TEXT",
+          "unit": null,
+          "default_value": "Tableros contrachapados fenólicos de madera de pino, reforzados con varillas y perfiles",
+          "is_required": 1,
+          "display_order": 0,
+          "created_at": "2025-11-25 15:30:07",
+          "options": [
+            {
+              "option_id": 72,
+              "variable_id": 51,
+              "option_value": "tableros_contrachapados_fenolicos_de_madera_de_pin",
+              "option_label": "Tableros contrachapados fenólicos de madera de pino, reforzados con varillas y perfiles",
+              "display_order": 1,
+              "is_default": 1,
+              "created_at": "2025-11-25 15:30:07"
+            }
+          ]
+        },
+        {
+          "variable_id": 52,
+          "element_id": 2,
+          "variable_name": "opcion_adicional_m_54",
+          "variable_type": "TEXT",
+          "unit": null,
+          "default_value": "Sopandas metálicas y accesorios de montaje",
+          "is_required": 1,
+          "display_order": 0,
+          "created_at": "2025-11-25 15:30:07",
+          "options": [
+            {
+              "option_id": 73,
+              "variable_id": 52,
+              "option_value": "sopandas_metalicas_y_accesorios_de_montaje",
+              "option_label": "Sopandas metálicas y accesorios de montaje",
+              "display_order": 1,
+              "is_default": 1,
+              "created_at": "2025-11-25 15:30:07"
+            }
+          ]
+        },
+        {
+          "variable_id": 53,
+          "element_id": 2,
+          "variable_name": "opcion_adicional_m_55",
+          "variable_type": "TEXT",
+          "unit": null,
+          "default_value": "Agente desmoldeante para hormigones con acabado visto",
+          "is_required": 1,
+          "display_order": 0,
+          "created_at": "2025-11-25 15:30:07",
+          "options": [
+            {
+              "option_id": 74,
+              "variable_id": 53,
+              "option_value": "agente_desmoldeante_para_hormigones_con_acabado_vi",
+              "option_label": "Agente desmoldeante para hormigones con acabado visto",
+              "display_order": 1,
+              "is_default": 1,
+              "created_at": "2025-11-25 15:30:07"
+            }
+          ]
+        },
+        {
+          "variable_id": 54,
+          "element_id": 2,
+          "variable_name": "opcion_adicional_m_56",
+          "variable_type": "TEXT",
+          "unit": null,
+          "default_value": "Agente filmógeno, para curado de hormigones con acabado visto",
+          "is_required": 1,
+          "display_order": 0,
+          "created_at": "2025-11-25 15:30:07",
+          "options": [
+            {
+              "option_id": 75,
+              "variable_id": 54,
+              "option_value": "agente_filmogeno_para_curado_de_hormigones_con_aca",
+              "option_label": "Agente filmógeno, para curado de hormigones con acabado visto",
+              "display_order": 1,
+              "is_default": 1,
+              "created_at": "2025-11-25 15:30:07"
+            }
+          ]
+        },
+        {
+          "variable_id": 23,
+          "element_id": 2,
+          "variable_name": "posicion_viga",
+          "variable_type": "TEXT",
+          "unit": null,
+          "default_value": "Exenta",
+          "is_required": 1,
+          "display_order": 0,
+          "created_at": "2025-11-25 15:30:07",
+          "options": [
+            {
+              "option_id": 42,
+              "variable_id": 23,
+              "option_value": "exenta",
+              "option_label": "Exenta",
+              "display_order": 1,
+              "is_default": 1,
+              "created_at": "2025-11-25 15:30:07"
+            },
+            {
+              "option_id": 43,
+              "variable_id": 23,
+              "option_value": "recta",
+              "option_label": "Recta",
+              "display_order": 2,
+              "is_default": 0,
+              "created_at": "2025-11-25 15:30:07"
+            },
+            {
+              "option_id": 44,
+              "variable_id": 23,
+              "option_value": "inclinada",
+              "option_label": "Inclinada",
+              "display_order": 3,
+              "is_default": 0,
+              "created_at": "2025-11-25 15:30:07"
+            }
+          ]
+        },
+        {
+          "variable_id": 21,
+          "element_id": 2,
+          "variable_name": "tipo_acero",
+          "variable_type": "TEXT",
+          "unit": null,
+          "default_value": "B 500 S",
+          "is_required": 1,
+          "display_order": 0,
+          "created_at": "2025-11-25 15:30:07",
+          "options": [
+            {
+              "option_id": 35,
+              "variable_id": 21,
+              "option_value": "b_400_s",
+              "option_label": "B 400 S",
+              "display_order": 1,
+              "is_default": 0,
+              "created_at": "2025-11-25 15:30:07"
+            },
+            {
+              "option_id": 36,
+              "variable_id": 21,
+              "option_value": "b_400_sd",
+              "option_label": "B 400 SD",
+              "display_order": 2,
+              "is_default": 0,
+              "created_at": "2025-11-25 15:30:07"
+            },
+            {
+              "option_id": 37,
+              "variable_id": 21,
+              "option_value": "b_500_s",
+              "option_label": "B 500 S",
+              "display_order": 3,
+              "is_default": 1,
+              "created_at": "2025-11-25 15:30:07"
+            },
+            {
+              "option_id": 38,
+              "variable_id": 21,
+              "option_value": "b_500_sd",
+              "option_label": "B 500 SD",
+              "display_order": 4,
+              "is_default": 0,
+              "created_at": "2025-11-25 15:30:07"
+            }
+          ]
+        },
+        {
+          "variable_id": 18,
+          "element_id": 2,
+          "variable_name": "tipo_hormigon",
+          "variable_type": "TEXT",
+          "unit": null,
+          "default_value": "Convencional",
+          "is_required": 1,
+          "display_order": 0,
+          "created_at": "2025-11-25 15:30:07",
+          "options": [
+            {
+              "option_id": 20,
+              "variable_id": 18,
+              "option_value": "conventional",
+              "option_label": "Convencional",
+              "display_order": 1,
+              "is_default": 1,
+              "created_at": "2025-11-25 15:30:07"
+            },
+            {
+              "option_id": 21,
+              "variable_id": 18,
+              "option_value": "self_compacting",
+              "option_label": "Autocompactante",
+              "display_order": 2,
+              "is_default": 0,
+              "created_at": "2025-11-25 15:30:07"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

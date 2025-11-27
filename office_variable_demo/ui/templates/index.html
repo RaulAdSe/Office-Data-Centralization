@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+
+{% block title %}Elements - Office Variable System{% endblock %}
+
+{% block content %}
+<h1>Office Elements Catalog</h1>
+<p>Browse {{ elements|length }} construction elements in the database</p>
+
+<div class="element-grid">
+    {% for element in elements %}
+    <div class="element-card">
+        <h3><a href="/element/{{ element.element_code }}">{{ element.element_name }}</a></h3>
+        <div class="element-code">{{ element.element_code }}</div>
+        {% if element.price %}
+        <div>Price: €{{ "%.2f"|format(element.price) }}</div>
+        {% endif %}
+        <a href="/element/{{ element.element_code }}" class="btn">View Details</a>
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}

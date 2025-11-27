@@ -262,3 +262,4 @@ rendered = db.render_description(project_element_id)
 - `src/db_manager.py` - Database manager implementation
 - `src/README.md` - Usage guide
 
+
