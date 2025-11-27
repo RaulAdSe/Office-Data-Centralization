@@ -220,7 +220,7 @@ class DatabaseManager:
         self,
         element_code: str,
         element_name: str,
-        price: Optional[float] = None,  # Keep parameter for compatibility but ignore
+        price: Optional[float] = None,  # Price parameter for element (optional)
         created_by: Optional[str] = None
     ) -> int:
         """
@@ -473,8 +473,9 @@ class DatabaseManager:
         params.append(option_id)
         
         with self.get_connection() as conn:
+            sql = "UPDATE variable_options SET " + ', '.join(updates) + " WHERE option_id = ?"
             conn.execute(
-                f"UPDATE variable_options SET {', '.join(updates)} WHERE option_id = ?",
+                sql,
                 params
             )
             conn.commit()

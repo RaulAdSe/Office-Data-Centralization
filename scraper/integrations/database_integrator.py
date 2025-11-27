@@ -134,7 +134,8 @@ class CYPEDatabaseIntegrator:
         # Prepare options for database - KEEP VALUES IN SPANISH
         options = []
         if var.options:
-            for i, option_text in enumerate(var.options):
+            for i in range(len(var.options)):
+                option_text = var.options[i]
                 is_default = (option_text == var.default_value)
                 options.append({
                     'option_value': option_text,  # Store Spanish text as value

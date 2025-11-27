@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Test: Discover and process exactly 2 elements with static templates
+Test: Discover and process elements with static templates
 """
 
 import sys
@@ -18,10 +18,13 @@ import requests
 from bs4 import BeautifulSoup
 import re
 
-def discover_two_elements():
-    """Discover exactly 2 elements from CYPE"""
+# Test configuration
+NUM_TEST_ELEMENTS = 2
+
+def discover_test_elements():
+    """Discover elements from CYPE for testing"""
     
-    print("🔍 DISCOVERING 2 ELEMENTS...")
+    print(f"🔍 DISCOVERING {NUM_TEST_ELEMENTS} ELEMENTS...")
     
     # Try a known category that has elements
     test_url = "https://generadordeprecios.info/obra_nueva/Estructuras/Hormigon_armado/Vigas.html"
@@ -41,14 +44,14 @@ def discover_two_elements():
                 # Check if it looks like an element (not category)
                 if re.search(r'[A-Z]{2,}[0-9]{2,}', href):  # Pattern like EHV015
                     element_urls.append(full_url)
-                    if len(element_urls) >= 2:
+                    if len(element_urls) >= NUM_TEST_ELEMENTS:
                         break
         
-        if len(element_urls) >= 2:
+        if len(element_urls) >= NUM_TEST_ELEMENTS:
             print(f"   ✅ Found {len(element_urls)} elements:")
-            for i, url in enumerate(element_urls[:2]):
+            for i, url in enumerate(element_urls[:NUM_TEST_ELEMENTS]):
                 print(f"      {i+1}. {url}")
-            return element_urls[:2]
+            return element_urls[:NUM_TEST_ELEMENTS]
         else:
             # Fallback to known working URLs
             fallback_urls = [
@@ -155,7 +158,7 @@ def process_element(url, element_extractor, db_manager, element_number):
 def test_two_elements():
     """Main test function"""
     
-    print("🧪 DISCOVER AND PROCESS 2 ELEMENTS TEST")
+    print(f"🧪 DISCOVER AND PROCESS {NUM_TEST_ELEMENTS} ELEMENTS TEST")
     print("=" * 50)
     
     # Initialize components
@@ -163,10 +166,10 @@ def test_two_elements():
     db_path = str(Path(__file__).parent.parent / "src" / "office_data.db")
     db_manager = DatabaseManager(db_path)
     
-    # Phase 1: Discover 2 elements
-    element_urls = discover_two_elements()
-    if len(element_urls) < 2:
-        print("❌ Could not discover 2 elements")
+    # Phase 1: Discover elements
+    element_urls = discover_test_elements()
+    if len(element_urls) < NUM_TEST_ELEMENTS:
+        print(f"❌ Could not discover {NUM_TEST_ELEMENTS} elements")
         return False
     
     # Phase 2: Process both elements

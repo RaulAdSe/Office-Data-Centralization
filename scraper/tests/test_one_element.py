@@ -94,7 +94,8 @@ def test_one_element():
             variables_added += 1
             
             # Add options for this variable
-            for i, option in enumerate(var.options):
+            for i in range(len(var.options)):
+                option = var.options[i]
                 db_manager.add_variable_option(
                     variable_id=variable_id,
                     option_value=option,
