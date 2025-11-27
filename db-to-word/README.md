@@ -15,11 +15,12 @@ This project implements a system for managing parametric architectural descripti
         * Creates a sample project ("PROY-2025") and assigns specific values to instances.
 
 * **`renderizar_y_exportar.py`**
-    * [cite_start]**Purpose:** Logic engine and export utility[cite: 3].
+    * **Purpose:** Logic engine and export utility.
     * **Functionality:**
-        * [cite_start]**Rendering (`renderizar_textos`):** Identifies "stale" descriptions (flagged by database triggers) and updates them by replacing template placeholders (e.g., `{vidrio_ph}`) with actual values derived from `project_element_values`[cite: 7, 21, 23].
-        * **Export (`exportar_excel`):** Generates an Excel report containing full data, reference mappings, and a MailMerge-ready sheet.
-
+        * **Rendering (`renderizar_textos`):** Identifies "stale" descriptions (flagged by database triggers) and updates them by replacing template placeholders (e.g., `{vidrio_ph}`) with actual values derived from `project_element_values`.
+        * **Export (`exportar_excel_friendly`):** Generates a UX-optimized Excel report designed for Mail Merge.
+            * Creates an **`INDEX_ELEMENTS`** sheet for quick user reference.
+            * Creates a **`MAIL_MERGE_DATA`** sheet using **Smart Hierarchical Naming** for columns (e.g., `MC01_FACH_SUR_DESC`). This ensures variables are logically grouped by element type in Word's dropdown menu, rather than sorted alphabetically by generic names.
 ### Database & SQL
 
 * **`schema.sql`**
