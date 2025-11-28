@@ -2,24 +2,13 @@ import sqlite3
 import pandas as pd
 import os
 import re
-import sys
-from pathlib import Path
 
-# Add src to path for importing DatabaseManager
-sys.path.insert(0, str(Path(__file__).parent.parent / 'src')) 
+DB_NAME = "office_data.db"
 
-# --- CONFIGURATION ---
-DB_NAME = "office_data.db" 
-
-# --- FUNCTIONS ---
 def renderizar_textos(conn):
-    """
-    Calculate final texts by substituting {placeholders} with real values.
-    """
     cursor = conn.cursor()
-    print("   [1/2] Calculating parametric texts (Rendering)...")
+    print("   [1/2] Calculant textos paramètrics...")
 
-    # A. Find which elements need to be updated
     query_pendientes = """
     SELECT rd.project_element_id, pe.description_version_id, dv.description_template
     FROM rendered_descriptions rd
@@ -30,13 +19,10 @@ def renderizar_textos(conn):
     pendientes = cursor.execute(query_pendientes).fetchall()
     
     if not pendientes:
-        print("         -> Nothing to recalculate.")
+        print("         -> Tot està al dia.")
         return
 
-    print(f"         -> Found {len(pendientes)} elements to process.")
-
     for p_elem_id, version_id, template in pendientes:
-        # B. Find values for this element
         query_valores = """
         SELECT tvm.placeholder, pev.value
         FROM template_variable_mappings tvm
@@ -45,57 +31,33 @@ def renderizar_textos(conn):
         """
         valores = cursor.execute(query_valores, (version_id, p_elem_id)).fetchall()
 
-        # C. Substitute text
         texto_final = template
         for placeholder, valor_real in valores:
-            if valor_real:
-                texto_final = texto_final.replace(placeholder, str(valor_real))
-            else:
-                texto_final = texto_final.replace(placeholder, "[NO VALUE]")
+            val = str(valor_real) if valor_real else "[SIN VALOR]"
+            texto_final = texto_final.replace(placeholder, val)
 
-        # C.1. Validate that all placeholders were replaced
-        remaining_placeholders = re.findall(r'\{[^}]+\}', texto_final)
-        if remaining_placeholders:
-            print(f"         -> WARNING: Unreplaced placeholders found in element {p_elem_id}: {remaining_placeholders}")
-            # Replace remaining placeholders with a warning message
-            for placeholder in remaining_placeholders:
-                texto_final = texto_final.replace(placeholder, "[UNMAPPED PLACEHOLDER]")
-
-        # D. Save result
-        cursor.execute("""
-            UPDATE rendered_descriptions 
-            SET rendered_text = ?, is_stale = 0, rendered_at = CURRENT_TIMESTAMP
-            WHERE project_element_id = ?
-        """, (texto_final, p_elem_id))
+        cursor.execute("UPDATE rendered_descriptions SET rendered_text = ?, is_stale = 0 WHERE project_element_id = ?", (texto_final, p_elem_id))
 
     conn.commit()
-    print("         -> Calculation completed.")
+    print("         -> Càlcul completat.")
 
 
-def exportar_excel_friendly(codigo_proyecto):
-    """
-    Generate an Excel file designed for end-user (Mail Merge)
-    with clean column names ordered by hierarchy.
-    """
-    print(f"\n--- Generating User-Optimized Excel: {codigo_proyecto} ---")
+def exportar_excel_categorias(codigo_proyecto):
+    print(f"\n--- Generant Excel per Categories: {codigo_proyecto} ---")
     
-    # Security check
     if not os.path.exists(DB_NAME):
-        print(f"❌ CRITICAL ERROR: Cannot find file '{DB_NAME}'.")
-        print(f"   Looking in: {os.getcwd()}")
-        print("   Make sure you've executed 'gestor_db.py' first.")
+        print(f"❌ Error: No trobo {DB_NAME}")
         return
 
     conn = sqlite3.connect(DB_NAME)
-    
-    # 1. Calculate texts before exporting
     renderizar_textos(conn)
 
-    # 2. Get data (add element_code for better grouping)
+    # 1. Obtenim dades INCLOENT LA CATEGORIA
     query = """
     SELECT 
+        e.category,       -- NOVA COLUMNA CLAU
         pe.instance_code,
-        e.element_code,   -- Used to know the 'Type'
+        e.element_code,
         pe.instance_name,
         pe.location,
         rd.rendered_text,
@@ -106,59 +68,61 @@ def exportar_excel_friendly(codigo_proyecto):
     JOIN projects p ON pe.project_id = p.project_id
     LEFT JOIN rendered_descriptions rd ON pe.project_element_id = rd.project_element_id
     WHERE p.project_code = ?
+    ORDER BY e.category, pe.instance_code
     """
     df = pd.read_sql_query(query, conn, params=(codigo_proyecto,))
     conn.close()
 
     if df.empty:
-        print(f"❌ Error: No data found for project '{codigo_proyecto}'.")
+        print("❌ No hi ha dades.")
         return
 
-    output_file = f"{codigo_proyecto}_DATA.xlsx"
-    
-    print("   [2/2] Creating Excel file...")
+    output_file = f"{codigo_proyecto}_CATEGORIAS.xlsx"
+    print("   [2/2] Creant fitxer Excel multipàgina...")
     
     with pd.ExcelWriter(output_file, engine='openpyxl') as writer:
-        # ---------------------------------------------------------
-        # SHEET 1: INDEX
-        # ---------------------------------------------------------
-        df_index = df[['instance_code', 'element_code', 'instance_name', 'location']].copy()
-        df_index.columns = ['Word Code', 'Type', 'Real Name', 'Location']
-        df_index.to_excel(writer, sheet_name="INDEX_ELEMENTS", index=False)
         
-        # ---------------------------------------------------------
-        # SHEET 2: MAIL MERGE (HORIZONTAL DATA)
-        # ---------------------------------------------------------
-        datos_merge = {}
+        # FULLA 1: INDEX GENERAL
+        df_index = df[['category', 'instance_code', 'instance_name', 'location']].copy()
+        df_index.to_excel(writer, sheet_name="INDEX_GLOBAL", index=False)
         
-        # A) Project Data
-        datos_merge['PROY_Nombre'] = df.iloc[0]['project_name']
-        datos_merge['PROY_Codigo'] = df.iloc[0]['project_code']
+        # --- BUCLE MÀGIC: CREAR UNA FULLA PER CATEGORIA ---
+        # Obtenim la llista de categories úniques (ex: ['ARQUITECTURA', 'ESTRUCTURA'])
+        categorias = df['category'].unique()
 
-        # B) Element Data
-        for index, row in df.iterrows():
-            # Clean the code (remove spaces and hyphens so Word doesn't complain)
-            tipo_clean = re.sub(r'[^a-zA-Z0-9]', '', str(row['element_code']))
-            instancia_clean = re.sub(r'[^a-zA-Z0-9]', '_', str(row['instance_code']))
+        for cat in categorias:
+            print(f"         -> Generant fulla: MM_{cat}")
             
-            # Build the KEY PREFIX: MC01_FACH_SUR_
-            prefix = f"{tipo_clean}_{instancia_clean}"
+            # Filtrem només les files d'aquesta categoria
+            df_cat = df[df['category'] == cat]
+            
+            datos_merge = {}
+            
+            # A) Dades Projecte (Sempre les posem a totes les fulles per comoditat)
+            datos_merge['PROY_Nombre'] = df.iloc[0]['project_name']
+            datos_merge['PROY_Codigo'] = df.iloc[0]['project_code']
 
-            # Add the variables
-            datos_merge[f"{prefix}_NOM"] = row['instance_name']
-            datos_merge[f"{prefix}_DESC"] = row['rendered_text'] 
-            datos_merge[f"{prefix}_UBI"] = row['location']
+            # B) Dades Elements d'aquesta categoria
+            for index, row in df_cat.iterrows():
+                tipo_clean = re.sub(r'[^a-zA-Z0-9]', '', str(row['element_code']))
+                instancia_clean = re.sub(r'[^a-zA-Z0-9]', '_', str(row['instance_code']))
+                
+                # Prefix (ex: MC01_FACH_SUR)
+                prefix = f"{tipo_clean}_{instancia_clean}"
 
-        # Create the horizontal DataFrame
-        df_merge = pd.DataFrame([datos_merge])
-        
-        # Save to the sheet that Word will read
-        df_merge.to_excel(writer, sheet_name="MAIL_MERGE_DATA", index=False)
-        
-    print(f"✅ SUCCESS! File generated: {output_file}")
-    print("   Now you can connect Word to the 'MAIL_MERGE_DATA' sheet.")
+                datos_merge[f"{prefix}_NOM"] = row['instance_name']
+                datos_merge[f"{prefix}_DESC"] = row['rendered_text'] 
+                datos_merge[f"{prefix}_UBI"] = row['location']
 
-# --- EXECUTION ---
+            # Transposem i guardem
+            df_final = pd.DataFrame([datos_merge])
+            
+            # Nom de la fulla: MM_ + Nom Categoria (ex: MM_ARQUITECTURA)
+            # Limitem a 31 caràcters per seguretat d'Excel
+            sheet_name = f"MM_{cat}"[:31]
+            df_final.to_excel(writer, sheet_name=sheet_name, index=False)
+
+    print(f"✅ ÈXIT! Excel generat: {output_file}")
+
 if __name__ == "__main__":
-    # Execute for our test project
-    exportar_excel_friendly("PROY-2025")
+    exportar_excel_categorias("PROY-2025")
