@@ -76,6 +76,19 @@ class DatabaseManager:
         if 'price' not in columns:
             conn.execute("ALTER TABLE elements ADD COLUMN price REAL")
             conn.commit()
+            
+        # Check if category column exists in elements table
+        if 'category' not in columns:
+            conn.execute("ALTER TABLE elements ADD COLUMN category VARCHAR(50)")
+            conn.commit()
+            
+        # Check if construction_categories table exists
+        cursor = conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='construction_categories'"
+        )
+        if cursor.fetchone() is None:
+            # Create the construction categories reference table
+            self._create_construction_categories_table(conn)
         
         # Check if template_variable_mappings table exists
         cursor = conn.execute(
@@ -220,7 +233,7 @@ class DatabaseManager:
         self,
         element_code: str,
         element_name: str,
-        price: Optional[float] = None,  # Price parameter for element (optional)
+        category: str,  # Required category parameter
         created_by: Optional[str] = None
     ) -> int:
         """
@@ -229,17 +242,27 @@ class DatabaseManager:
         Args:
             element_code: Unique code for the element
             element_name: Name of the element
-            price: Ignored (kept for compatibility)
+            category: Construction category (must be from the 33 official categories)
             created_by: User who created the element
             
         Returns:
             element_id of the created element
+            
+        Raises:
+            ValueError: If category is not valid
         """
+        # Validate category
+        if not self.validate_category(category):
+            valid_categories = self.get_valid_categories()
+            raise ValueError(
+                f"Invalid category '{category}'. Must be one of: {', '.join(valid_categories)}"
+            )
+            
         with self.get_connection() as conn:
             cursor = conn.execute(
-                """INSERT INTO elements (element_code, element_name, created_by)
-                   VALUES (?, ?, ?)""",
-                (element_code, element_name, created_by)
+                """INSERT INTO elements (element_code, element_name, category, created_by)
+                   VALUES (?, ?, ?, ?)""",
+                (element_code, element_name, category, created_by)
             )
             return cursor.lastrowid
     
@@ -1102,6 +1125,107 @@ class DatabaseManager:
                 """SELECT * FROM rendered_descriptions 
                    WHERE project_element_id = ?""",
                 (project_element_id,)
+            )
+            row = cursor.fetchone()
+            return dict(row) if row else None
+    
+    # ============================================================
+    # CATEGORY MANAGEMENT
+    # ============================================================
+    
+    def _create_construction_categories_table(self, conn: sqlite3.Connection):
+        """
+        Create the construction_categories reference table with 33 categories.
+        
+        Args:
+            conn: Database connection
+        """
+        # Import the official 33 categories
+        from construction_categories import DATABASE_CATEGORIES, CATEGORY_GROUPS
+        
+        # Create table
+        conn.execute("""
+            CREATE TABLE construction_categories (
+                category_id     INTEGER PRIMARY KEY AUTOINCREMENT,
+                category_name   VARCHAR(50) NOT NULL UNIQUE,
+                display_order   INTEGER NOT NULL,
+                logical_group   VARCHAR(50),
+                description     TEXT,
+                created_at      DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        
+        # Create index
+        conn.execute("CREATE INDEX idx_construction_categories_name ON construction_categories(category_name)")
+        
+        # Insert all 33 categories with logical groups
+        for order, category in enumerate(DATABASE_CATEGORIES, 1):
+            # Find logical group for this category
+            logical_group = None
+            for group_name, categories in CATEGORY_GROUPS.items():
+                if category in categories:
+                    logical_group = group_name
+                    break
+            
+            description = f'Elementos de {category.lower()}'
+            
+            conn.execute(
+                """INSERT INTO construction_categories 
+                   (category_name, display_order, logical_group, description) 
+                   VALUES (?, ?, ?, ?)""",
+                (category, order, logical_group, description)
+            )
+        
+        conn.commit()
+    
+    def validate_category(self, category: str) -> bool:
+        """
+        Validate that a category is one of the 33 official categories.
+        
+        Args:
+            category: Category name to validate
+            
+        Returns:
+            True if valid, False otherwise
+        """
+        valid_categories = self.get_valid_categories()
+        return category in valid_categories
+    
+    def get_valid_categories(self) -> List[str]:
+        """
+        Get list of valid construction categories.
+        
+        Returns:
+            List of valid category names
+        """
+        from construction_categories import DATABASE_CATEGORIES
+        return DATABASE_CATEGORIES.copy()
+    
+    def get_categories_by_group(self) -> Dict[str, List[str]]:
+        """
+        Get categories organized by logical groups.
+        
+        Returns:
+            Dictionary mapping group names to category lists
+        """
+        from construction_categories import CATEGORY_GROUPS
+        return CATEGORY_GROUPS.copy()
+    
+    def get_category_info(self, category: str) -> Optional[Dict[str, Any]]:
+        """
+        Get detailed information about a category.
+        
+        Args:
+            category: Category name
+            
+        Returns:
+            Dictionary with category info or None if not found
+        """
+        with self.get_connection() as conn:
+            cursor = conn.execute(
+                """SELECT * FROM construction_categories 
+                   WHERE category_name = ?""",
+                (category,)
             )
             row = cursor.fetchone()
             return dict(row) if row else None
