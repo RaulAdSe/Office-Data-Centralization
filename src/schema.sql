@@ -11,6 +11,18 @@ CREATE TABLE elements (
     element_id      INTEGER PRIMARY KEY AUTOINCREMENT,
     element_code    VARCHAR(50) NOT NULL UNIQUE,
     element_name    VARCHAR(255) NOT NULL,
+    category        VARCHAR(50) NOT NULL CHECK (category IN (
+        'ASCENSOR', 'CARPINTERIA', 'CARPINTERIA INDUSTRIAL', 'CARTELERIA',
+        'CIMENTACION', 'CUBIERTAS Y FACHADAS', 'ENCEPADOS', 'EQUIPAMIENTOS',
+        'ESTRUCTURA DE MADERA', 'ESTRUCTURA METALICA', 'ESTRUCTURA PREFABRICADA',
+        'FONTANERIA', 'GEOTECNICO', 'GRUPO ELECTROGENO', 'INAUFUGACION',
+        'INSTALACION BT', 'INSTALACION DE CLIMA Y VENTILACION', 'INSTALACION DE FRIO',
+        'INSTALACION DE PARARRAYOS', 'INSTALACION PCI', 'MOVIMIENTO DE TIERRAS',
+        'MURO CORTINA', 'OBRA CIVIL', 'PILOTATGE', 'SANEAMIENTO PLUVIALES CUBIERTA',
+        'SANEAMIENTO RESIDUALES', 'SANEAMIENTO URBANIZACION', 'SLOTDRAIN', 'SOLERAS',
+        'SUMINISTRO DE CT Y CS', 'SUMINISTRO SEPARADORES DE HIDROCARBURO',
+        'SUMINISTROS DE ILUMINACION', 'URBANIZACION EXTERIOR'
+    )),
     created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
     created_by      VARCHAR(100)
 );
@@ -274,6 +286,58 @@ SELECT
 FROM elements e
 JOIN element_variables ev ON e.element_id = ev.element_id
 ORDER BY e.element_code, ev.display_order;
+
+-- ============================================================
+-- CONSTRUCTION CATEGORIES REFERENCE - 33 Official Categories
+-- ============================================================
+
+CREATE TABLE construction_categories (
+    category_id     INTEGER PRIMARY KEY AUTOINCREMENT,
+    category_name   VARCHAR(50) NOT NULL UNIQUE,
+    display_order   INTEGER NOT NULL,
+    logical_group   VARCHAR(50),
+    description     TEXT,
+    created_at      DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Insert all 33 official categories
+INSERT INTO construction_categories (category_name, display_order, logical_group, description) VALUES
+('ASCENSOR', 1, 'EQUIPAMIENTO_ACABADOS', 'Sistemas de transporte vertical'),
+('CARPINTERIA', 2, 'ENVOLVENTE', 'Elementos de carpintería general'),
+('CARPINTERIA INDUSTRIAL', 3, 'ENVOLVENTE', 'Carpintería industrial específica'),
+('CARTELERIA', 4, 'EQUIPAMIENTO_ACABADOS', 'Elementos de señalización y cartelería'),
+('CIMENTACION', 5, 'CIVIL_CIMENTACION', 'Elementos de cimentación general'),
+('CUBIERTAS Y FACHADAS', 6, 'ENVOLVENTE', 'Sistemas de cubierta y fachada'),
+('ENCEPADOS', 7, 'CIVIL_CIMENTACION', 'Elementos de encepado'),
+('EQUIPAMIENTOS', 8, 'EQUIPAMIENTO_ACABADOS', 'Equipamiento general del edificio'),
+('ESTRUCTURA DE MADERA', 9, 'ESTRUCTURAS', 'Elementos estructurales de madera'),
+('ESTRUCTURA METALICA', 10, 'ESTRUCTURAS', 'Elementos estructurales metálicos'),
+('ESTRUCTURA PREFABRICADA', 11, 'ESTRUCTURAS', 'Elementos estructurales prefabricados'),
+('FONTANERIA', 12, 'FONTANERIA_PCI', 'Instalaciones de fontanería y agua'),
+('GEOTECNICO', 13, 'CIVIL_CIMENTACION', 'Trabajos geotécnicos'),
+('GRUPO ELECTROGENO', 14, 'ELECTRICIDAD', 'Sistemas de generación eléctrica'),
+('INAUFUGACION', 15, 'ENVOLVENTE', 'Sistemas de inauguración'),
+('INSTALACION BT', 16, 'ELECTRICIDAD', 'Instalaciones de baja tensión'),
+('INSTALACION DE CLIMA Y VENTILACION', 17, 'CLIMATIZACION', 'Sistemas de climatización y ventilación'),
+('INSTALACION DE FRIO', 18, 'CLIMATIZACION', 'Sistemas de refrigeración'),
+('INSTALACION DE PARARRAYOS', 19, 'ELECTRICIDAD', 'Sistemas de protección contra rayos'),
+('INSTALACION PCI', 20, 'FONTANERIA_PCI', 'Protección contra incendios'),
+('MOVIMIENTO DE TIERRAS', 21, 'CIVIL_CIMENTACION', 'Trabajos de movimiento de tierras'),
+('MURO CORTINA', 22, 'ENVOLVENTE', 'Sistemas de muro cortina'),
+('OBRA CIVIL', 23, 'CIVIL_CIMENTACION', 'Obras civiles generales'),
+('PILOTATGE', 24, 'CIVIL_CIMENTACION', 'Sistemas de pilotaje'),
+('SANEAMIENTO PLUVIALES CUBIERTA', 25, 'SANEAMIENTO', 'Saneamiento de aguas pluviales en cubierta'),
+('SANEAMIENTO RESIDUALES', 26, 'SANEAMIENTO', 'Saneamiento de aguas residuales'),
+('SANEAMIENTO URBANIZACION', 27, 'SANEAMIENTO', 'Saneamiento de urbanización'),
+('SLOTDRAIN', 28, 'SANEAMIENTO', 'Sistemas de drenaje tipo slot'),
+('SOLERAS', 29, 'ESTRUCTURAS', 'Elementos de solera'),
+('SUMINISTRO DE CT Y CS', 30, 'ELECTRICIDAD', 'Suministros de centro de transformación y cuadros secundarios'),
+('SUMINISTRO SEPARADORES DE HIDROCARBURO', 31, 'SANEAMIENTO', 'Separadores de hidrocarburos'),
+('SUMINISTROS DE ILUMINACION', 32, 'ELECTRICIDAD', 'Sistemas de iluminación'),
+('URBANIZACION EXTERIOR', 33, 'URBANIZACION', 'Elementos de urbanización exterior');
+
+-- Create index on category name for lookups
+CREATE INDEX idx_construction_categories_name ON construction_categories(category_name);
 
 -- ============================================================
 -- END OF SCHEMA
