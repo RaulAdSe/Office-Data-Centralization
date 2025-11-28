@@ -53,12 +53,12 @@ python renderizar_y_exportar.py
 Action: Resolves any pending text templates and generates the PROY-2025_DATA.xlsx file containing the project data.
 
 ## Output Format
-The generated Excel file (PROY-2025_DATA.xlsx) contains two sheets designed for documentation workflows:
+The generated Excel file (PROY-2025_CATEGORIAS.xlsx) contains multiple sheets designed for organized documentation workflows:
 
 | Sheet Name            | Description |
 | :-------------------- | :---------- |
-| **INDEX_ELEMENTS**    | Quick user reference of all project elements and their properties, derived from the `v_project_elements_rendered` view. |
-| **MAIL_MERGE_DATA**   | Data formatted for Word Mail Merge, using smart hierarchical naming for columns (e.g., `MC01_FACH_SUR_DESC`) to group variables logically by element type. |
+| **INDEX_ELEMENTS**    | Quick user reference of all project elements and their properties, derived from the database view. |
+| **MM_[CATEGORY]**   | Dedicated sheets for each category (e.g., MM_ARQUITECTURA, MM_ESTRUCTURA). Each sheet contains only the variables relevant to that discipline, using smart hierarchical naming (MC01_FACH_SUR_DESC) for easy Mail Merge integration. |
 
 ## Data Model Overview
 The system relies on a relational model where:
