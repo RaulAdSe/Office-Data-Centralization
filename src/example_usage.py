@@ -21,6 +21,7 @@ def main():
     element_id = db.create_element(
         element_code='WALL',
         element_name='Wall',
+        category='ESTRUCTURA PREFABRICADA',
         created_by='architect_1'
     )
     print(f"Created element with ID: {element_id}")

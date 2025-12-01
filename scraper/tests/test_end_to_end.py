@@ -148,14 +148,14 @@ def test_end_to_end():
                 log_progress("Extracting element data...")
                 extraction_start = time.time()
                 element = element_extractor.extract_element_data(url)
-            
-            if not element:
-                print("   ❌ Failed to extract element data")
-                continue
                 
-            print(f"   ✅ Extracted: {element.code} - {element.title}")
-            print(f"   💰 Price: {element.price}€")
-            print(f"   🔧 Variables: {len(element.variables)}")
+                if not element:
+                    print("   ❌ Failed to extract element data")
+                    continue
+                
+                print(f"   ✅ Extracted: {element.code} - {element.title}")
+                print(f"   💰 Price: {element.price}€")
+                print(f"   🔧 Variables: {len(element.variables)}")
             
             # Step 2b: Generate template
             print("   📝 Generating template...")
@@ -227,12 +227,12 @@ def test_end_to_end():
                 'template_id': description_version_id
             })
             
-            print(f"   🎉 Element {i+1} complete!")
-            
-        except Exception as e:
-            print(f"   ❌ Error processing element: {e}")
-            import traceback
-            traceback.print_exc()
+                print(f"   🎉 Element {i+1} complete!")
+                
+            except Exception as e:
+                print(f"   ❌ Error processing element: {e}")
+                import traceback
+                traceback.print_exc()
     
     # Step 3: Verification
     print(f"\n✅ STEP 3: VERIFICATION")
