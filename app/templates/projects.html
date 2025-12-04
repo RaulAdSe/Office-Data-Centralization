@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+
+{% block title %}Projects - Office Variable System{% endblock %}
+
+{% block content %}
+<h1>Projects</h1>
+
+<a href="/create_project" class="btn">+ New Project</a>
+
+{% if projects %}
+<div style="margin-top: 30px;">
+    {% for project in projects %}
+    <div class="element-card">
+        <h3><a href="/project/{{ project[0] }}">{{ project[2] }}</a></h3>
+        <div class="element-code">{{ project[1] }}</div>
+        <p><strong>Status:</strong> {{ project[3] }}</p>
+        {% if project[6] %}
+        <p><strong>Location:</strong> {{ project[6] }}</p>
+        {% endif %}
+        <p><strong>Created:</strong> {{ project[7] }}</p>
+        <a href="/project/{{ project[0] }}" class="btn">View Project</a>
+        <a href="/add_element_to_project/{{ project[0] }}" class="btn">+ Add Element</a>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<p>No projects found. <a href="/create_project">Create your first project</a>.</p>
+{% endif %}
+{% endblock %}
