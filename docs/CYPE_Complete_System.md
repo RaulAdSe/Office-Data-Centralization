@@ -1184,3 +1184,285 @@ print('✅ Pipeline instantiation works!')
 # Run production (dry run)
 python3 scraper/run_production.py --help
 ```
+
+## 🔧 Phase 8: Browser Extraction Timing & Placeholder Derivation
+
+### The Challenge: CYPE Dynamic Page Behavior
+
+CYPE pages have unique behavior that required special handling:
+
+1. **Cookie Consent Overlay**: A `termsfeed-com---nb-interstitial-overlay` blocks all interactions
+2. **Full Page Navigation**: Clicking a radio button triggers a **complete page navigation** to a new URL
+3. **URL-Encoded State**: The URL encodes all variable selections (e.g., `...separadores%20soportes:_0_0_0_0_0_0_11_0`)
+4. **Collapsed Accordions**: Description content is hidden in collapsed accordion sections
+
+### Solution 1: Cookie Consent Dismissal
+
+```python
+async def _dismiss_cookie_consent(self, page):
+    """Dismiss cookie consent popups that block interaction."""
+    # Try clicking accept buttons
+    button_selectors = [
+        'button:has-text("Aceptar")',
+        'button:has-text("Accept")',
+        '.termsfeed-com---palette-dark button',
+    ]
+
+    for selector in button_selectors:
+        btn = await page.query_selector(selector)
+        if btn and await btn.is_visible():
+            await btn.click()
+            return
+
+    # Fallback: Hide overlays via JavaScript
+    await page.evaluate('''() => {
+        document.querySelectorAll(
+            '.termsfeed-com---nb-interstitial-overlay, ' +
+            '[class*="cookie"], [class*="consent"]'
+        ).forEach(el => { el.style.display = 'none'; });
+    }''')
+```
+
+### Solution 2: Handling Page Navigation on Radio Click
+
+**Discovery**: Clicking a CYPE radio button doesn't just update the page - it **navigates to a completely new URL**.
+
+```
+Initial URL: .../EHS010_Pilar_rectangular_o_cuadrado_de_hor.html
+After click: .../separadores%20soportes:_0_0_0_0_0_0_11_0
+```
+
+**Implementation**:
+```python
+async def apply_combination(self, page, combination):
+    for var_name, value in combination.values.items():
+        initial_url = page.url
+        await self._set_value(page, var_name, value)
+
+        # Wait briefly for potential navigation
+        await page.wait_for_timeout(500)
+
+        # Check if navigation occurred
+        if page.url != initial_url:
+            # URL changed - wait for page to fully load
+            await page.wait_for_load_state('networkidle', timeout=8000)
+            # Dismiss cookies on new page (they reset!)
+            await self._dismiss_cookie_consent(page)
+
+            # For single_change strategy, stop after first change
+            # to avoid interfering with the new page's state
+            if combination.strategy == 'single_change':
+                break
+```
+
+**Key Insight**: After navigation, trying to set other fields (even to their default values) can trigger **another navigation**, undoing the first change. The solution is to stop after the first actual change for `single_change` strategy.
+
+### Solution 3: Accurate Fieldset/Legend Matching
+
+**Problem**: CYPE radio buttons use names like `m_1`, `m_2` (not the legend text). The fieldset legend contains the meaningful variable name.
+
+**Initial Bug**: Fuzzy matching `"Dimensión 'B'"` matched `"Dimensión 'A'"` fieldset because both start with `"dimensión"`.
+
+**Fixed Matching Logic**:
+```python
+await page.evaluate('''(args) => {
+    const [varName, targetValue] = args;
+    const fieldsets = document.querySelectorAll('fieldset');
+
+    // First pass: EXACT legend match (case-insensitive)
+    for (const fs of fieldsets) {
+        const legendText = fs.querySelector('legend')?.innerText?.trim() || '';
+
+        if (legendText.toLowerCase() === varName.toLowerCase()) {
+            const radios = fs.querySelectorAll('input[type="radio"]');
+            for (const radio of radios) {
+                const label = radio.closest('.form-check')
+                    ?.querySelector('label')?.innerText?.trim() || '';
+
+                // Skip if already checked
+                if (radio.checked && label === targetValue) {
+                    return { success: false, alreadySet: true };
+                }
+
+                if (label === targetValue) {
+                    radio.click();
+                    return { success: true, clicked: label };
+                }
+            }
+        }
+    }
+
+    // Second pass: partial match (for edge cases)
+    // ... with stricter criteria
+}''', [var_name, value])
+```
+
+### Solution 4: Accordion Expansion for Description
+
+**Problem**: The description is in the "Pliego de condiciones" accordion, which is **collapsed by default**.
+
+```python
+async def extract_description(self, page):
+    # First, expand the "Pliego de condiciones" accordion
+    await page.evaluate('''() => {
+        const accordions = document.querySelectorAll('.accordion-item');
+        for (const acc of accordions) {
+            const header = acc.querySelector('.accordion-button');
+            if (header?.innerText?.toLowerCase().includes('pliego')) {
+                if (header.classList.contains('collapsed')) {
+                    header.click();
+                }
+            }
+        }
+    }''')
+    await page.wait_for_timeout(500)  # Wait for animation
+
+    # Now extract description from expanded accordion
+    description = await page.evaluate(JS_EXTRACT_DESCRIPTION)
+    return description
+```
+
+### Placeholder Derivation: The Core Innovation
+
+**How it works**: Compare descriptions from different variable combinations to identify which parts change.
+
+#### Step 1: Generate Strategic Combinations
+```python
+# CombinationGenerator creates 3-5 strategic combinations:
+# 1. Default: All first options (baseline)
+# 2. Single_change: Change ONE variable from default
+# 3. Pair_change: Change TWO variables (detect interactions)
+
+combinations = [
+    {"Sección media (cm)": "20", "Dimensión 'A'": "20", ...},  # default
+    {"Sección media (cm)": "50", "Dimensión 'A'": "20", ...},  # single_change
+    {"Sección media (cm)": "20", "Dimensión 'A'": "50", ...},  # single_change
+]
+```
+
+#### Step 2: Extract Description for Each Combination
+```
+Combination 1 (default):         → "...de 30x30 cm de sección media..."
+Combination 2 (Sección=50):      → "...de 50x30 cm de sección media..."
+Combination 3 (Dimensión A=50):  → "...de 20x30 cm de sección media..."
+```
+
+#### Step 3: Compare to Find Variable Parts
+```python
+# Differences detected:
+#   Position 4: "30x30" vs "50x30" vs "20x30"
+#
+# → These variable parts become placeholders:
+#   "...de {dimension_a}x{dimension_b} cm de sección media..."
+```
+
+### Real Test Results
+
+```
+======================================================================
+FINAL TEST WITH FIXED EXTRACTION
+======================================================================
+
+--- Combination 1 (default) ---
+  Sección media (cm): 20
+  Dimensión 'A' (cm): 20
+  Dimension: n/a cm (accordion not expanded on initial page)
+
+--- Combination 2 (single_change) ---
+  Sección media (cm): 50
+  Dimensión 'A' (cm): 20
+  Dimension: 50x30 cm ✓
+
+--- Combination 3 (single_change) ---
+  Sección media (cm): 20
+  Dimensión 'A' (cm): 50
+  Dimension: 20x30 cm ✓
+
+RESULTS:
+  Dimensions extracted: ['n/a', '50x30', '20x30']
+  SUCCESS: 2 unique descriptions!
+  → Template placeholders can be derived from differences
+```
+
+### Timing Strategy Summary
+
+| Step | Wait Time | Purpose |
+|------|-----------|---------|
+| After page load | `networkidle` | Initial content ready |
+| After cookie dismiss | 500ms | Overlay animation |
+| After radio click | 500ms | Check for navigation |
+| After navigation | `networkidle` + 500ms | New page + DOM stable |
+| After accordion click | 500ms | Expand animation |
+| Before description extract | 300ms | Final DOM settle |
+
+### Key Files Modified
+
+1. **`scraper/template_extraction/browser_extractor.py`**:
+   - Added `_dismiss_cookie_consent()` method
+   - Fixed `apply_combination()` to handle navigation
+   - Fixed `_set_value()` with exact fieldset matching
+   - Added accordion expansion in `extract_description()`
+
+2. **`scraper/template_extraction/combination_generator.py`**:
+   - Added cookie dismissal call after page load
+   - Integrated with browser extractor's navigation handling
+
+### Architecture: Browser Extraction Flow
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    CYPEExtractor.extract(url)                    │
+└─────────────────────────────────────────────────────────────────┘
+                                │
+                                ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  1. page.goto(url) → wait_for_load_state('networkidle')         │
+│  2. _dismiss_cookie_consent(page)                                │
+│  3. _extract_form_variables(page) → 21 variables                 │
+└─────────────────────────────────────────────────────────────────┘
+                                │
+                                ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  CombinationGenerator.generate(variables)                        │
+│  → 3 strategic combinations (default, single_change x2)          │
+└─────────────────────────────────────────────────────────────────┘
+                                │
+                                ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  For each combination:                                           │
+│  ┌─────────────────────────────────────────────────────────────┐│
+│  │  apply_combination(page, combo):                            ││
+│  │    1. _set_value() → click radio via fieldset/legend match  ││
+│  │    2. wait 500ms → check URL change                         ││
+│  │    3. if navigated: networkidle + dismiss cookies           ││
+│  │    4. if single_change: stop after first navigation         ││
+│  │    5. extract_description() → expand accordion + extract    ││
+│  └─────────────────────────────────────────────────────────────┘│
+└─────────────────────────────────────────────────────────────────┘
+                                │
+                                ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  Results: [(combo1, desc1), (combo2, desc2), (combo3, desc3)]   │
+│                                                                  │
+│  Compare descriptions → Find variable parts → Derive placeholders│
+│  "50x30 cm" vs "20x30 cm" → {dimension_a}x{dimension_b} cm       │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Usage Example
+
+```python
+from scraper.template_extraction import CYPEExtractor
+
+async with CYPEExtractor(headless=True, timeout=45000) as extractor:
+    variables, results = await extractor.extract(url)
+
+    # variables: 21 ElementVariable objects with options
+    # results: 3 CombinationResult objects with descriptions
+
+    # Compare results to derive template placeholders
+    for i, r in enumerate(results):
+        print(f"Combo {i+1}: {r.description[:100]}...")
+```
+
+This browser extraction system enables **automatic template placeholder derivation** by intelligently comparing descriptions across different variable combinations, handling CYPE's unique page navigation behavior, and properly timing all interactions.
