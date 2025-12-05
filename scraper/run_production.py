@@ -157,59 +157,39 @@ def extract_element_content(urls, max_elements):
     return extracted_elements
 
 def generate_templates(elements):
-    """Generate templates using enhanced template system"""
-    
-    print(f"\n🔧 GENERATING ENHANCED TEMPLATES")
+    """
+    Generate templates from extracted elements.
+
+    NOTE: For advanced template extraction with variable detection,
+    use the new CYPEExtractor from scraper.template_extraction:
+
+        from scraper.template_extraction import CYPEExtractor
+        async with CYPEExtractor() as extractor:
+            variables, results = await extractor.extract(url)
+    """
+    print(f"\n🔧 GENERATING TEMPLATES")
     print("-" * 60)
-    
-    # Import enhanced template system
-    sys.path.insert(0, str(Path(__file__).parent / "template_extraction"))
-    from enhanced_template_system import EnhancedTemplateSystem
-    
-    # Initialize enhanced system with correct database path
-    db_path = Path(__file__).parent.parent / "src" / "office_data.db"
-    enhanced_system = EnhancedTemplateSystem(str(db_path))
-    
-    # Convert elements to the format expected by enhanced system
-    enhanced_elements = []
+
+    templates = []
     for elem in elements:
-        enhanced_element = {
+        template = {
             'element_code': elem['element_code'],
             'title': elem['title'],
             'description': elem['description'],
             'price': elem['price'],
             'url': elem['url'],
-            'variables': elem.get('variables', [])  # Include enhanced variables!
+            'variables': elem.get('variables', []),
+            'template_type': 'dynamic' if elem.get('variables') else 'static',
+            'placeholders': [v.get('name') for v in elem.get('variables', []) if v.get('name')]
         }
-        enhanced_elements.append(enhanced_element)
-    
-    # Group by element code
-    grouped_elements = enhanced_system.group_elements_by_code(enhanced_elements)
-    
-    print(f"   Grouped into {len(grouped_elements)} element families")
-    for code, variations in grouped_elements.items():
-        print(f"     {code}: {len(variations)} variations")
-    
-    # Generate enhanced templates with semantic placeholders
-    enhanced_templates = enhanced_system.generate_enhanced_templates(grouped_elements)
-    
-    # Count dynamic vs static
-    dynamic_count = len([t for t in enhanced_templates if t.get('placeholders')])
-    static_count = len(enhanced_templates) - dynamic_count
-    
-    print(f"✅ Enhanced templates generated: {dynamic_count} dynamic, {static_count} static")
-    
-    # Show dynamic templates
-    if dynamic_count > 0:
-        print(f"🎯 Dynamic templates with placeholders:")
-        for template in enhanced_templates:
-            if template.get('placeholders'):
-                print(f"     {template['element_code']}: {template['placeholders']}")
-    
-    return enhanced_templates
+        templates.append(template)
 
-# Enhanced template functions moved to enhanced_template_system.py
-# These basic functions are no longer needed
+    dynamic_count = len([t for t in templates if t['template_type'] == 'dynamic'])
+    static_count = len(templates) - dynamic_count
+
+    print(f"✅ Templates generated: {dynamic_count} dynamic, {static_count} static")
+
+    return templates
 
 def store_templates(templates, db_manager):
     """Store enhanced templates with variables in database"""
