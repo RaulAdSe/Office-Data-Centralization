@@ -238,6 +238,20 @@ class CYPEPipeline:
         match = re.search(r'/([A-Z]{2,3}[A-Z0-9]+)(?:\.html)?$', url, re.IGNORECASE)
         return match.group(1).upper() if match else "UNKNOWN"
 
+    @property
+    def db_manager(self):
+        """Lazy-load the database manager."""
+        if not hasattr(self, '_db_manager') or self._db_manager is None:
+            import sys
+            from pathlib import Path
+            # Add src/ to path for db_manager import
+            src_path = Path(__file__).parent.parent / "src"
+            if str(src_path) not in sys.path:
+                sys.path.insert(0, str(src_path))
+            from db_manager import DatabaseManager
+            self._db_manager = DatabaseManager(self.config.db_path)
+        return self._db_manager
+
     def store_element(self, element: ElementData) -> bool:
         """
         Store element data in the database.
@@ -249,14 +263,110 @@ class CYPEPipeline:
             True if successful, False otherwise
         """
         try:
-            # Use db_integrator for storage
-            # This is a simplified version - adapt based on your database schema
             logger.info(f"Storing element: {element.code}")
-            # TODO: Implement actual storage using db_integrator
+
+            # Determine category from URL or use default
+            category = self._extract_category_from_url(element.url)
+
+            # Create element
+            element_id = self.db_manager.create_element(
+                element_code=element.code,
+                element_name=element.title,
+                category=category,
+                created_by="pipeline"
+            )
+
+            # Store variables
+            for i, var in enumerate(element.variables):
+                # Map variable type to database types
+                db_type = self._map_variable_type(var.variable_type)
+
+                # Prepare options
+                options = None
+                if var.options:
+                    options = [
+                        {
+                            'option_value': opt,
+                            'option_label': opt,
+                            'is_default': opt == var.default_value,
+                            'display_order': j
+                        }
+                        for j, opt in enumerate(var.options)
+                    ]
+
+                self.db_manager.add_variable(
+                    element_id=element_id,
+                    variable_name=var.name,
+                    variable_type=db_type,
+                    unit=var.unit,
+                    default_value=var.default_value,
+                    is_required=var.is_required,
+                    display_order=i,
+                    options=options
+                )
+
+            # Store description template
+            if element.description:
+                self._store_description_template(element_id, element.description)
+
             return True
+
         except Exception as e:
             logger.error(f"Storage failed for {element.code}: {e}")
             return False
+
+    def _map_variable_type(self, var_type) -> str:
+        """Map VariableType enum to database type string."""
+        from scraper.models import VariableType
+        if isinstance(var_type, VariableType):
+            if var_type in (VariableType.NUMERIC, VariableType.TEXT):
+                return var_type.value
+            elif var_type in (VariableType.RADIO, VariableType.SELECT, VariableType.CATEGORICAL):
+                return "TEXT"  # Options stored separately
+            elif var_type == VariableType.CHECKBOX:
+                return "TEXT"
+        return "TEXT"
+
+    def _extract_category_from_url(self, url: str) -> str:
+        """Extract construction category from URL and map to valid database category."""
+        url_lower = url.lower()
+
+        # Map CYPE URL patterns to valid database categories
+        category_mapping = {
+            '/estructuras/hormigon': 'ESTRUCTURA PREFABRICADA',
+            '/estructuras/acero': 'ESTRUCTURA METALICA',
+            '/estructuras/madera': 'ESTRUCTURA DE MADERA',
+            '/cimentaciones/': 'CIMENTACION',
+            '/instalaciones/electricas': 'INSTALACION BT',
+            '/instalaciones/fontaneria': 'FONTANERIA',
+            '/instalaciones/clima': 'INSTALACION DE CLIMA Y VENTILACION',
+            '/instalaciones/ventilacion': 'INSTALACION DE CLIMA Y VENTILACION',
+            '/instalaciones/pci': 'INSTALACION PCI',
+            '/revestimientos/': 'CUBIERTAS Y FACHADAS',
+            '/cubiertas/': 'CUBIERTAS Y FACHADAS',
+            '/fachadas/': 'CUBIERTAS Y FACHADAS',
+            '/carpinteria/': 'CARPINTERIA',
+            '/saneamiento/': 'SANEAMIENTO RESIDUALES',
+            '/urbanizacion/': 'URBANIZACION EXTERIOR',
+        }
+
+        for pattern, category in category_mapping.items():
+            if pattern in url_lower:
+                return category
+
+        # Default fallback
+        return 'OBRA CIVIL'
+
+    def _store_description_template(self, element_id: int, description: str):
+        """Store description as a template."""
+        with self.db_manager.get_connection() as conn:
+            conn.execute(
+                """INSERT INTO description_versions
+                   (element_id, version_number, description_template, state, is_active, created_by, created_at)
+                   VALUES (?, 1, ?, 'S3', 1, 'pipeline', datetime('now'))""",
+                (element_id, description)
+            )
+            conn.commit()
 
     async def run(
         self,
