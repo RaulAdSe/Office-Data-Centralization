@@ -67,8 +67,29 @@ JS_EXTRACT_SELECTS = '''() => {
 
 # JavaScript for extracting description
 JS_EXTRACT_DESCRIPTION = '''() => {
-    // Try accordion with "Descripción"
+    // Try accordion with "Pliego de condiciones" (contains full description)
     const accordions = document.querySelectorAll('.accordion-item, [class*="accordion"]');
+    for (const acc of accordions) {
+        const header = acc.querySelector('.accordion-button, button');
+        const headerText = header?.innerText?.toLowerCase() || '';
+
+        // Check "Pliego de condiciones" first (most complete description)
+        if (headerText.includes('pliego') || headerText.includes('condiciones')) {
+            const body = acc.querySelector('.accordion-body, [class*="collapse"]');
+            if (body) {
+                // Extract the description paragraph (usually starts with element name)
+                const text = body.innerText?.trim();
+                // Find the main description (after "UNIDAD DE OBRA" header)
+                const match = text.match(/UNIDAD DE OBRA[^:]+:([^]+?)(?:NORMATIVA|CRITERIO|$)/i);
+                if (match) {
+                    return match[1].trim();
+                }
+                return text.substring(0, 2000);  // Limit length
+            }
+        }
+    }
+
+    // Fallback: try "Descripción" accordion
     for (const acc of accordions) {
         const header = acc.querySelector('.accordion-button, button');
         if (header?.innerText?.toLowerCase().includes('descripci')) {
@@ -78,7 +99,7 @@ JS_EXTRACT_DESCRIPTION = '''() => {
     }
 
     // Try paragraphs with construction patterns
-    const patterns = [/aislamiento/i, /sistema/i, /mortero/i, /panel/i, /fachada/i];
+    const patterns = [/aislamiento/i, /sistema/i, /mortero/i, /panel/i, /fachada/i, /pilar/i, /hormig/i];
     let descText = '';
     for (const p of document.querySelectorAll('p')) {
         const text = p.innerText?.trim();
@@ -132,6 +153,48 @@ class BrowserExtractor:
                 "Playwright not installed. Run: pip install playwright && playwright install"
             )
 
+    async def _dismiss_cookie_consent(self, page):
+        """Dismiss cookie consent popups that block interaction."""
+        try:
+            # Common cookie consent selectors
+            selectors = [
+                '.termsfeed-com---nb-interstitial-overlay',
+                '.cookie-consent',
+                '#cookie-consent',
+                '[class*="cookie"]',
+                '[class*="consent"]',
+            ]
+
+            # Try to click accept/dismiss buttons
+            button_selectors = [
+                'button:has-text("Aceptar")',
+                'button:has-text("Accept")',
+                'button:has-text("Acepto")',
+                '.termsfeed-com---palette-dark button',
+                '[class*="accept"]',
+            ]
+
+            for selector in button_selectors:
+                try:
+                    btn = await page.query_selector(selector)
+                    if btn and await btn.is_visible():
+                        await btn.click()
+                        await page.wait_for_timeout(500)
+                        return
+                except Exception:
+                    continue
+
+            # If no button found, try to hide overlays via JavaScript
+            await page.evaluate('''() => {
+                const overlays = document.querySelectorAll(
+                    '.termsfeed-com---nb-interstitial-overlay, ' +
+                    '[class*="cookie"], [class*="consent"], [class*="overlay"]'
+                );
+                overlays.forEach(el => { el.style.display = 'none'; });
+            }''')
+        except Exception:
+            pass  # Continue even if dismissal fails
+
     async def _close_browser(self):
         """Close browser and cleanup."""
         if self.context:
@@ -148,6 +211,9 @@ class BrowserExtractor:
         try:
             await page.goto(url, timeout=self.timeout)
             await page.wait_for_load_state('networkidle')
+
+            # Dismiss cookie consent popup
+            await self._dismiss_cookie_consent(page)
 
             # Extract from form elements
             variables = await self._extract_form_variables(page)
@@ -195,6 +261,25 @@ class BrowserExtractor:
 
     async def extract_description(self, page) -> str:
         """Extract description from page."""
+        # First, try to expand the "Pliego de condiciones" accordion
+        try:
+            await page.evaluate('''() => {
+                const accordions = document.querySelectorAll('.accordion-item');
+                for (const acc of accordions) {
+                    const header = acc.querySelector('.accordion-button');
+                    const headerText = header?.innerText?.toLowerCase() || '';
+                    if (headerText.includes('pliego') || headerText.includes('condiciones')) {
+                        // Click to expand if collapsed
+                        if (header.classList.contains('collapsed')) {
+                            header.click();
+                        }
+                    }
+                }
+            }''')
+            await page.wait_for_timeout(500)  # Wait for accordion animation
+        except Exception:
+            pass
+
         description = await page.evaluate(JS_EXTRACT_DESCRIPTION)
         return description if description and len(description) > 50 else ""
 
@@ -203,12 +288,44 @@ class BrowserExtractor:
         page,
         combination: VariableCombination
     ) -> CombinationResult:
-        """Apply a combination and capture the resulting description."""
+        """Apply a combination and capture the resulting description.
+
+        Note: CYPE pages navigate to a new URL when radio buttons are clicked.
+        We only change ONE field to avoid cascading navigation issues.
+        """
         try:
+            # For single_change strategy, identify the ONE field that differs
+            # Apply only that change to avoid navigation issues
+            changed_count = 0
+
             for var_name, value in combination.values.items():
+                initial_url = page.url
                 await self._set_value(page, var_name, value)
 
-            await page.wait_for_timeout(500)
+                # Wait briefly for potential navigation
+                await page.wait_for_timeout(500)
+
+                # Check if navigation occurred
+                if page.url != initial_url:
+                    changed_count += 1
+                    # URL changed - wait for page to fully load
+                    await page.wait_for_load_state('networkidle', timeout=8000)
+                    # Dismiss cookies on new page
+                    await self._dismiss_cookie_consent(page)
+                    # Additional wait for DOM to stabilize
+                    await page.wait_for_timeout(500)
+
+                    # For single_change strategy, stop after first actual change
+                    # to avoid interfering with the new page's state
+                    if combination.strategy == 'single_change':
+                        break
+
+                # Limit total changes to avoid long processing
+                if changed_count >= 2:
+                    break
+
+            # Extract description from final page state
+            await page.wait_for_timeout(300)
             description = await self.extract_description(page)
 
             return CombinationResult(
@@ -226,23 +343,90 @@ class BrowserExtractor:
 
     async def _set_value(self, page, var_name: str, value: str):
         """Set a variable's value in the form."""
-        # Try radio buttons
-        radios = await page.query_selector_all(f'input[type="radio"][name="{var_name}"]')
-        for radio in radios:
-            label = await radio.evaluate('''el =>
-                el.labels?.[0]?.innerText || el.nextSibling?.textContent?.trim() || el.value
-            ''')
-            if label and (value.lower() in label.lower() or label.lower() in value.lower()):
-                await radio.click()
-                return
+        # CYPE uses fieldset/legend structure - find radio by legend text
+        # First, try to find the fieldset with matching legend (exact match preferred)
+        clicked = await page.evaluate('''(args) => {
+            const [varName, targetValue] = args;
+            const fieldsets = document.querySelectorAll('fieldset');
 
-        # Try select
-        select = await page.query_selector(f'select[name="{var_name}"], select[id="{var_name}"]')
-        if select:
-            await select.select_option(label=value)
+            // First pass: exact legend match
+            for (const fs of fieldsets) {
+                const legend = fs.querySelector('legend');
+                const legendText = legend?.innerText?.trim() || '';
+
+                // Exact match (case-insensitive)
+                if (legendText.toLowerCase() === varName.toLowerCase()) {
+                    const radios = fs.querySelectorAll('input[type="radio"]');
+                    for (const radio of radios) {
+                        let label = '';
+                        const formCheck = radio.closest('.form-check');
+                        if (formCheck) {
+                            label = formCheck.querySelector('label')?.innerText?.trim() || '';
+                        }
+                        if (!label && radio.labels?.length > 0) {
+                            label = radio.labels[0]?.innerText?.trim() || '';
+                        }
+
+                        // Skip if already checked
+                        if (radio.checked && label === targetValue) {
+                            return { success: false, alreadySet: true };
+                        }
+
+                        if (label === targetValue) {
+                            radio.click();
+                            return { success: true, clicked: label, fieldset: legendText };
+                        }
+                    }
+                }
+            }
+
+            // Second pass: partial match (for similar names)
+            for (const fs of fieldsets) {
+                const legend = fs.querySelector('legend');
+                const legendText = legend?.innerText?.trim() || '';
+
+                // Partial match but require significant overlap
+                if (legendText.toLowerCase().includes(varName.toLowerCase()) ||
+                    (varName.length > 15 && varName.toLowerCase().includes(legendText.toLowerCase()))) {
+
+                    const radios = fs.querySelectorAll('input[type="radio"]');
+                    for (const radio of radios) {
+                        let label = '';
+                        const formCheck = radio.closest('.form-check');
+                        if (formCheck) {
+                            label = formCheck.querySelector('label')?.innerText?.trim() || '';
+                        }
+                        if (!label && radio.labels?.length > 0) {
+                            label = radio.labels[0]?.innerText?.trim() || '';
+                        }
+
+                        if (radio.checked && label === targetValue) {
+                            return { success: false, alreadySet: true };
+                        }
+
+                        if (label === targetValue) {
+                            radio.click();
+                            return { success: true, clicked: label, fieldset: legendText };
+                        }
+                    }
+                }
+            }
+            return { success: false };
+        }''', [var_name, value])
+
+        if clicked.get('success'):
             return
 
-        # Try text input
+        # Fallback: Try select elements
+        select = await page.query_selector(f'select[name="{var_name}"], select[id="{var_name}"]')
+        if select:
+            try:
+                await select.select_option(label=value)
+                return
+            except Exception:
+                pass
+
+        # Fallback: Try text input
         input_el = await page.query_selector(f'input[name="{var_name}"], input[id="{var_name}"]')
         if input_el:
             await input_el.fill(value)

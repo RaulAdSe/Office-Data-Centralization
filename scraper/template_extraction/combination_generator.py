@@ -181,6 +181,9 @@ class CYPEExtractor:
             await page.goto(url, timeout=self.browser_extractor.timeout)
             await page.wait_for_load_state('networkidle')
 
+            # Dismiss cookie consent popup
+            await self.browser_extractor._dismiss_cookie_consent(page)
+
             # Extract variables
             variables = await self.browser_extractor._extract_form_variables(page)
 
