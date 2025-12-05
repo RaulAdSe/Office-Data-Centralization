@@ -10,7 +10,7 @@ import time
 import json
 import os
 from typing import List, Set
-from page_detector import detect_page_type, fetch_page
+from .page_detector import detect_page_type, fetch_page
 from datetime import datetime
 import concurrent.futures
 import threading
