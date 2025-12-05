@@ -22,9 +22,11 @@ Usage:
     result = integrator.integrate_template(template, element_id)
 """
 
-from .models import (
+# Import from unified models
+from scraper.models import (
     VariableType,
-    ExtractedVariable,
+    ElementVariable,
+    ExtractedVariable,  # Backwards compatibility alias
     VariableCombination,
     CombinationResult,
 )
@@ -54,9 +56,10 @@ from .template_db_integrator import (
 BrowserCombinationGenerator = CYPEExtractor
 
 __all__ = [
-    # Models
+    # Models (from unified scraper.models)
     'VariableType',
-    'ExtractedVariable',
+    'ElementVariable',
+    'ExtractedVariable',  # Backwards compatibility alias
     'VariableCombination',
     'CombinationResult',
     # Extractors

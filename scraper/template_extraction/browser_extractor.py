@@ -3,7 +3,7 @@ Playwright-based variable extraction from CYPE pages.
 """
 
 from typing import List, Tuple
-from .models import ExtractedVariable, VariableType, VariableCombination, CombinationResult
+from scraper.models import ElementVariable, VariableType, VariableCombination, CombinationResult
 from .text_extractor import TextVariableExtractor
 
 
@@ -141,7 +141,7 @@ class BrowserExtractor:
         if self._playwright:
             await self._playwright.stop()
 
-    async def extract_variables(self, url: str) -> List[ExtractedVariable]:
+    async def extract_variables(self, url: str) -> List[ElementVariable]:
         """Extract all variables from a CYPE URL."""
         page = await self.context.new_page()
 
@@ -166,14 +166,14 @@ class BrowserExtractor:
         finally:
             await page.close()
 
-    async def _extract_form_variables(self, page) -> List[ExtractedVariable]:
+    async def _extract_form_variables(self, page) -> List[ElementVariable]:
         """Extract variables from form elements."""
         variables = []
 
         # Extract from fieldsets
         fieldset_data = await page.evaluate(JS_EXTRACT_FIELDSETS)
         for data in fieldset_data:
-            variables.append(ExtractedVariable(
+            variables.append(ElementVariable(
                 name=data['name'],
                 variable_type=VariableType.RADIO,
                 options=data['options'],
@@ -184,7 +184,7 @@ class BrowserExtractor:
         select_data = await page.evaluate(JS_EXTRACT_SELECTS)
         for data in select_data:
             if not any(v.name == data['name'] for v in variables):
-                variables.append(ExtractedVariable(
+                variables.append(ElementVariable(
                     name=data['name'],
                     variable_type=VariableType.SELECT,
                     options=data['options'],

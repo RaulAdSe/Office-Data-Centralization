@@ -4,7 +4,7 @@ Text-based variable extraction from rendered CYPE content.
 
 import re
 from typing import List
-from .models import ExtractedVariable, VariableType
+from scraper.models import ElementVariable, VariableType
 
 
 class TextVariableExtractor:
@@ -27,7 +27,7 @@ class TextVariableExtractor:
         'acabado': (r'(?:brillante|mate|satinado|pulido|rugoso|liso)', 'Acabado'),
     }
 
-    def extract_from_text(self, text: str) -> List[ExtractedVariable]:
+    def extract_from_text(self, text: str) -> List[ElementVariable]:
         """Extract variables from rendered text content."""
         variables = []
 
@@ -37,7 +37,7 @@ class TextVariableExtractor:
 
         return self._deduplicate(variables)
 
-    def _extract_bullet_sections(self, text: str) -> List[ExtractedVariable]:
+    def _extract_bullet_sections(self, text: str) -> List[ElementVariable]:
         """Extract variables from bullet-point structured sections."""
         variables = []
         sections = re.split(r'\n\s*\n', text)
@@ -60,7 +60,7 @@ class TextVariableExtractor:
             if potential_name and len(options) >= 2:
                 name = re.sub(r'[:\s]+$', '', potential_name)
                 if 2 < len(name) < 100:
-                    variables.append(ExtractedVariable(
+                    variables.append(ElementVariable(
                         name=name,
                         variable_type=VariableType.CATEGORICAL,
                         options=options,
@@ -69,7 +69,7 @@ class TextVariableExtractor:
 
         return variables
 
-    def _extract_labeled_groups(self, text: str) -> List[ExtractedVariable]:
+    def _extract_labeled_groups(self, text: str) -> List[ElementVariable]:
         """Extract variables from 'Label: opt1, opt2' patterns."""
         variables = []
         pattern = r'([A-ZÁÉÍÓÚÑ][a-záéíóúñA-ZÁÉÍÓÚÑ\s]{2,30}):\s*([^.\n]+(?:[,/][^.\n]+)+)'
@@ -83,7 +83,7 @@ class TextVariableExtractor:
             options = [o for o in options if o and 1 < len(o) < 100]
 
             if len(options) >= 2:
-                variables.append(ExtractedVariable(
+                variables.append(ElementVariable(
                     name=name,
                     variable_type=VariableType.CATEGORICAL,
                     options=options,
@@ -92,7 +92,7 @@ class TextVariableExtractor:
 
         return variables
 
-    def _extract_construction_patterns(self, text: str) -> List[ExtractedVariable]:
+    def _extract_construction_patterns(self, text: str) -> List[ElementVariable]:
         """Extract variables using construction domain patterns."""
         variables = []
 
@@ -101,7 +101,7 @@ class TextVariableExtractor:
             if len(matches) >= 2:
                 unique = list(dict.fromkeys([m.lower() for m in matches]))
                 if len(unique) >= 2:
-                    variables.append(ExtractedVariable(
+                    variables.append(ElementVariable(
                         name=name,
                         variable_type=VariableType.CATEGORICAL,
                         options=unique,
@@ -110,7 +110,7 @@ class TextVariableExtractor:
 
         return variables
 
-    def _deduplicate(self, variables: List[ExtractedVariable]) -> List[ExtractedVariable]:
+    def _deduplicate(self, variables: List[ElementVariable]) -> List[ElementVariable]:
         """Remove duplicate variables by name."""
         seen = set()
         unique = []

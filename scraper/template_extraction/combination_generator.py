@@ -17,8 +17,8 @@ Usage:
 
 from typing import Dict, List, Any, Tuple
 
-from .models import (
-    ExtractedVariable,
+from scraper.models import (
+    ElementVariable,
     VariableCombination,
     CombinationResult,
     VariableType,
@@ -168,7 +168,7 @@ class CYPEExtractor:
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         await self.browser_extractor.__aexit__(exc_type, exc_val, exc_tb)
 
-    async def extract(self, url: str) -> Tuple[List[ExtractedVariable], List[CombinationResult]]:
+    async def extract(self, url: str) -> Tuple[List[ElementVariable], List[CombinationResult]]:
         """
         Extract variables and generate combination results from a CYPE URL.
 
