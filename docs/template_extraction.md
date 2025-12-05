@@ -206,3 +206,87 @@ The current template extraction system suffers from **fundamental architectural 
 **Recommendation**: Implement the simplification plan immediately to remove technical debt, then systematically rebuild core functionality with browser automation. This approach will deliver a working system that integrates with real CYPE data while being significantly simpler to maintain and extend.
 
 The resulting system will transform from a **broken research prototype** into a **production-ready integration** that actually works with live CYPE construction data.
+
+---
+
+## Updates (December 2024)
+
+### ✅ combination_generator.py - REWRITTEN
+
+The `combination_generator.py` module has been completely rewritten with Playwright browser automation. The new implementation successfully extracts real CYPE variables from live pages.
+
+#### What Changed
+
+| Aspect | Before | After |
+|--------|--------|-------|
+| Variable extraction | Static HTML parsing (broken) | Playwright browser automation |
+| Variables found | 0-1 (empty `m_1`, `m_2` values) | **10+ real variables** with labels |
+| Options detected | None | **70+ real options** (Sistema, Espesor, Color, etc.) |
+| Description capture | Navigation menu text | **Actual construction specifications** |
+
+#### New Architecture
+
+```python
+# Three extraction strategies combined:
+
+1. BrowserCombinationGenerator  # Playwright-based, primary method
+   - Extracts from fieldset/legend structure
+   - Gets real labels from .form-check-label elements
+   - Captures dynamic descriptions after form interaction
+
+2. TextVariableExtractor        # Supplementary text parsing
+   - Parses bullet-point sections
+   - Extracts labeled option groups
+   - Infers from construction domain patterns
+
+3. CombinationGenerator         # Strategic sampling (unchanged)
+   - Default combination (baseline)
+   - Single-variable changes (isolate effects)
+   - Pair changes (detect interactions)
+   - Reduces millions of combinations to 5
+```
+
+#### Test Results
+
+Tested with real CYPE URL: `FSM020_Sistema_ETICS_Traditerm__GRUPO_PUMA.html`
+
+```
+EXTRACTED VARIABLES: 11
+  - Sistema: 4 options (Traditerm EPS, Traditerm Mineral, ...)
+  - Estructura soporte: 4 options (De hormigón, De fábrica cerámica, ...)
+  - Espesor (mm): 10 options (40, 50, 60, 120, 140, ...)
+  - Color: 26 options (Blanco 100, Marfil 015, ...)
+  - Malla de refuerzo: 2 options
+  - ... and 6 more
+
+Total possible combinations: 4,193,280
+Strategic combinations generated: 5
+```
+
+#### Usage
+
+```python
+from combination_generator import BrowserCombinationGenerator
+
+async with BrowserCombinationGenerator(headless=True) as generator:
+    variables, results = await generator.extract_variables_and_combinations(cype_url)
+
+    for var in variables:
+        print(f"{var.name}: {var.options}")
+
+    for result in results:
+        print(f"Description: {result.description[:200]}...")
+```
+
+#### Dependencies Added
+
+```bash
+pip install playwright
+playwright install chromium
+```
+
+#### Status
+
+- ✅ **Phase 2 COMPLETE**: Browser automation infrastructure implemented
+- ⏳ **Phase 3 PENDING**: Spanish construction domain expertise enhancements
+- ⏳ **Phase 4 PENDING**: Production optimization
