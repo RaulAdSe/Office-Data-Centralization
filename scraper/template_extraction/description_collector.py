@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 """
-Collect descriptions for different variable combinations
+Collect descriptions for different variable combinations.
+
+This module collects CYPE descriptions for various variable combinations,
+useful for template generation and validation.
 """
 
 import sys
 from pathlib import Path
 import time
 from typing import List, Dict, Optional
-from dataclasses import dataclass
 import json
 import requests
 from bs4 import BeautifulSoup
@@ -16,24 +18,8 @@ from bs4 import BeautifulSoup
 sys.path.insert(0, str(Path(__file__).parent.parent / "core"))
 
 from page_detector import fetch_page
-from combination_generator import VariableCombination
-
-@dataclass
-class DescriptionData:
-    """Stores description data for a specific variable combination"""
-    combination_id: str
-    variable_values: Dict[str, str]
-    description: str
-    full_html: str = ""
-    timestamp: str = ""
-    
-    def to_dict(self):
-        return {
-            'combination_id': self.combination_id,
-            'variable_values': self.variable_values,
-            'description': self.description,
-            'timestamp': self.timestamp
-        }
+from .models import VariableCombination
+from .template_validator import DescriptionData
 
 class DescriptionCollector:
     """Collects descriptions for different variable combinations"""
@@ -238,8 +224,8 @@ class DescriptionCollector:
 
 def test_description_collector():
     """Test the description collector"""
-    from combination_generator import CombinationGenerator, VariableCombination
-    
+    from .models import VariableCombination
+
     # Test with a simple combination
     test_combinations = [
         VariableCombination(
@@ -247,7 +233,7 @@ def test_description_collector():
             combination_id='test1'
         ),
         VariableCombination(
-            values={'material': 'acero', 'ubicacion': 'exterior'},  
+            values={'material': 'acero', 'ubicacion': 'exterior'},
             combination_id='test2'
         )
     ]

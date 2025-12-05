@@ -310,8 +310,67 @@ Result: **5 strategic tests** capture all variable effects.
 
 - ✅ **Phase 1 COMPLETE**: System cleanup (deleted 2000+ lines of dead code)
 - ✅ **Phase 2 COMPLETE**: Browser automation + modular architecture
-- ⏳ **Phase 3 PENDING**: Spanish construction domain expertise
+- ✅ **Phase 3 COMPLETE**: Spanish construction domain expertise
 - ⏳ **Phase 4 PENDING**: Production optimization
+
+---
+
+### ✅ Phase 3 Complete: Spanish Construction Domain Expertise
+
+Enhanced `template_validator.py` with comprehensive domain knowledge:
+
+#### Features Added
+
+| Feature | Description |
+|---------|-------------|
+| **Fuzzy matching** | Uses `difflib.SequenceMatcher` for accent-insensitive comparison |
+| **Material synonyms** | 60+ variations (hormigón, acero, madera, EPS, XPS, etc.) |
+| **Location synonyms** | 30+ variations (interior, exterior, fachada, cubierta, etc.) |
+| **Unit synonyms** | All metric units with variations (mm, cm, m², N/mm², MPa, etc.) |
+| **Abbreviation expansion** | HA, HP, EPS, XPS, SATE, ETICS, GL, fck, fyk |
+| **Lowered threshold** | 70% (was 80%) for Spanish technical text variations |
+
+#### Domain Knowledge Exports
+
+```python
+from scraper.template_extraction import (
+    MATERIAL_SYNONYMS,   # {'hormigón': ['HA', 'concreto', ...], ...}
+    LOCATION_SYNONYMS,   # {'interior': ['interiores', 'indoor', ...], ...}
+    UNIT_SYNONYMS,       # {'N/mm²': ['MPa', 'megapascal', ...], ...}
+    ABBREVIATIONS,       # {'HA': 'hormigón armado', ...}
+    fuzzy_match,         # (text1, text2, threshold) -> (bool, float)
+    remove_accents,      # (text) -> text without accents
+)
+```
+
+#### Quick Validation Helper
+
+```python
+from scraper.template_extraction import CYPEExtractor, validate_extraction_results
+
+async with CYPEExtractor() as extractor:
+    variables, results = await extractor.extract(url)
+
+    # Validate extraction quality
+    validation = validate_extraction_results(variables, results)
+    print(f"Accuracy: {validation.template_accuracy:.2%}")
+```
+
+#### Test Results
+
+```
+Testing Template Validator with Spanish Construction Domain
+
+1. Testing fuzzy matching:
+  ✓ 'hormigón armado' ~ 'hormigon armado': match=True, score=1.00
+  ✓ 'acero galvanizado' ~ 'acero galv.': match=True, score=0.71
+  ✓ 'interior' ~ 'interiores': match=True, score=0.90
+
+2. Testing template validation:
+  Overall Template Accuracy: 100.00%
+  Exact Matches: 0 | Fuzzy Matches: 3
+  🎉 EXCELLENT: Template is highly accurate!
+```
 
 ---
 

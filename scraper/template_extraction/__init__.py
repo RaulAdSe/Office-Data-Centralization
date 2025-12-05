@@ -11,6 +11,10 @@ Usage:
     # Just combination generation
     generator = CombinationGenerator()
     combinations = generator.generate(variables)
+
+    # Validate extraction results
+    from scraper.template_extraction import validate_extraction_results
+    validation = validate_extraction_results(variables, results)
 """
 
 from .models import (
@@ -22,18 +26,47 @@ from .models import (
 from .text_extractor import TextVariableExtractor
 from .browser_extractor import BrowserExtractor
 from .combination_generator import CombinationGenerator, CYPEExtractor
+from .template_validator import (
+    TemplateValidator,
+    ValidationResult,
+    DescriptionData,
+    ExtractedTemplate,
+    validate_extraction_results,
+    # Domain knowledge exports
+    MATERIAL_SYNONYMS,
+    LOCATION_SYNONYMS,
+    UNIT_SYNONYMS,
+    ABBREVIATIONS,
+    fuzzy_match,
+    remove_accents,
+)
 
 # Backwards compatibility
 BrowserCombinationGenerator = CYPEExtractor
 
 __all__ = [
+    # Models
     'VariableType',
     'ExtractedVariable',
     'VariableCombination',
     'CombinationResult',
+    # Extractors
     'TextVariableExtractor',
     'BrowserExtractor',
     'CombinationGenerator',
     'CYPEExtractor',
     'BrowserCombinationGenerator',
+    # Validation
+    'TemplateValidator',
+    'ValidationResult',
+    'DescriptionData',
+    'ExtractedTemplate',
+    'validate_extraction_results',
+    # Domain knowledge
+    'MATERIAL_SYNONYMS',
+    'LOCATION_SYNONYMS',
+    'UNIT_SYNONYMS',
+    'ABBREVIATIONS',
+    'fuzzy_match',
+    'remove_accents',
 ]
