@@ -2,9 +2,9 @@
 Playwright-based variable extraction from CYPE pages.
 """
 
-from typing import List, Tuple
+from typing import List, Tuple, Dict
 from scraper.models import ElementVariable, VariableType, VariableCombination, CombinationResult
-from .text_extractor import TextVariableExtractor
+from .text_extractor import TextVariableExtractor, TextExtractor
 
 
 # JavaScript for extracting variables from CYPE fieldsets
@@ -126,7 +126,11 @@ class BrowserExtractor:
     def __init__(self, headless: bool = True, timeout: int = 30000):
         self.headless = headless
         self.timeout = timeout
+        
+        # CORRECCIÓ AQUÍ: Tornem a posar 'text_extractor' que és el que busca el combination_generator.py
         self.text_extractor = TextVariableExtractor()
+        
+        self.template_builder = TextExtractor()  # La teva classe nova
         self._playwright = None
         self.browser = None
         self.context = None
@@ -220,6 +224,8 @@ class BrowserExtractor:
 
             # Supplement with text extraction
             rendered_text = await page.inner_text('body')
+            
+            # CORRECCIÓ AQUÍ: Fem servir self.text_extractor
             text_vars = self.text_extractor.extract_from_text(rendered_text)
 
             # Merge, avoiding duplicates
@@ -349,12 +355,12 @@ class BrowserExtractor:
             const [varName, targetValue] = args;
             const fieldsets = document.querySelectorAll('fieldset');
 
-            // First pass: exact legend match
+            # First pass: exact legend match
             for (const fs of fieldsets) {
                 const legend = fs.querySelector('legend');
                 const legendText = legend?.innerText?.trim() || '';
 
-                // Exact match (case-insensitive)
+                # Exact match (case-insensitive)
                 if (legendText.toLowerCase() === varName.toLowerCase()) {
                     const radios = fs.querySelectorAll('input[type="radio"]');
                     for (const radio of radios) {
@@ -367,7 +373,7 @@ class BrowserExtractor:
                             label = radio.labels[0]?.innerText?.trim() || '';
                         }
 
-                        // Skip if already checked
+                        # Skip if already checked
                         if (radio.checked && label === targetValue) {
                             return { success: false, alreadySet: true };
                         }
@@ -380,15 +386,15 @@ class BrowserExtractor:
                 }
             }
 
-            // Second pass: partial match (for similar names)
+            # Second pass: partial match (for similar names)
             for (const fs of fieldsets) {
                 const legend = fs.querySelector('legend');
                 const legendText = legend?.innerText?.trim() || '';
 
-                // Partial match but require significant overlap
-                if (legendText.toLowerCase().includes(varName.toLowerCase()) ||
+                # Partial match but require significant overlap
+                if (legendText.toLowerCase().includes(varName.toLowerCase()) || 
                     (varName.length > 15 && varName.toLowerCase().includes(legendText.toLowerCase()))) {
-
+                    
                     const radios = fs.querySelectorAll('input[type="radio"]');
                     for (const radio of radios) {
                         let label = '';
@@ -430,3 +436,51 @@ class BrowserExtractor:
         input_el = await page.query_selector(f'input[name="{var_name}"], input[id="{var_name}"]')
         if input_el:
             await input_el.fill(value)
+
+    def create_dynamic_template(self, results: List[CombinationResult]) -> str:
+        """
+        Process scraping results to create a final template with placeholders.
+        Uses the logic from Issue 13, 14, 15.
+        """
+        if not results:
+            return ""
+
+        # 1. Base (First description)
+        base_result = results[0]
+        base_text = base_result.description
+        base_vars = base_result.combination.values
+
+        all_replacements = []
+
+        # 2. Compare base against all other results
+        for i in range(1, len(results)):
+            target_result = results[i]
+            target_text = target_result.description
+            target_vars = target_result.combination.values
+
+            # A. Find text differences (Issue 13 Logic)
+            diffs = self.template_builder.find_differences(base_text, target_text)
+
+            # B. Identify which variable changed
+            var_changes = []
+            for name, val in base_vars.items():
+                if name in target_vars and target_vars[name] != val:
+                    var_changes.append({
+                        'variable_name': name,
+                        'old_value': val,
+                        'new_value': target_vars[name]
+                    })
+
+            # C. Map diffs to variables (Issue 14 Logic)
+            for diff in diffs:
+                if diff['type'] == 'replace':
+                    var_name = self.template_builder.map_difference_to_variable(diff, var_changes)
+                    if var_name:
+                        all_replacements.append({
+                            'start': diff['position'],
+                            'end': diff['position'] + len(diff['old_text']),
+                            'variable': var_name
+                        })
+
+        # 3. Build Final Template (Issue 15 Logic)
+        return self.template_builder.build_template(base_text, all_replacements)

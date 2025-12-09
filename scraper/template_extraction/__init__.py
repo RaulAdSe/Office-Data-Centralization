@@ -30,7 +30,7 @@ from scraper.models import (
     VariableCombination,
     CombinationResult,
 )
-from .text_extractor import TextVariableExtractor
+from .text_extractor import TextVariableExtractor, TextExtractor
 from .browser_extractor import BrowserExtractor
 from .combination_generator import CombinationGenerator, CYPEExtractor
 from .template_validator import (
@@ -63,6 +63,7 @@ __all__ = [
     'VariableCombination',
     'CombinationResult',
     # Extractors
+    'TextExtractor',
     'TextVariableExtractor',
     'BrowserExtractor',
     'CombinationGenerator',
