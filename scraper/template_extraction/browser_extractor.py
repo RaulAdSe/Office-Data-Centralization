@@ -2,7 +2,7 @@
 Playwright-based variable extraction from CYPE pages.
 """
 
-from typing import List, Tuple, Dict
+from typing import List, Tuple, Dict, Any
 from scraper.models import ElementVariable, VariableType, VariableCombination, CombinationResult
 from .text_extractor import TextVariableExtractor, TextExtractor
 
@@ -437,13 +437,38 @@ class BrowserExtractor:
         if input_el:
             await input_el.fill(value)
 
+    def _find_diff_span(self, text1: str, text2: str) -> Tuple[int, int]:
+        """
+        Find the start and end positions of the differing region between two texts.
+        Returns (start, end) where text1[start:end] is the part that differs.
+        """
+        # Find common prefix length
+        prefix_len = 0
+        min_len = min(len(text1), len(text2))
+        while prefix_len < min_len and text1[prefix_len] == text2[prefix_len]:
+            prefix_len += 1
+
+        # Find common suffix length (from the end)
+        suffix_len = 0
+        while (suffix_len < min_len - prefix_len and
+               text1[-(suffix_len + 1)] == text2[-(suffix_len + 1)]):
+            suffix_len += 1
+
+        # The differing region in text1
+        start = prefix_len
+        end = len(text1) - suffix_len
+
+        return start, end
+
     def create_dynamic_template(self, results: List[CombinationResult]) -> str:
         """
         Process scraping results to create a final template with placeholders.
         Uses the logic from Issue 13, 14, 15.
 
-        Fixed: Now finds actual variable value positions in text instead of
-        relying on character-level diff positions.
+        Handles cascading changes: when a variable change causes multiple text
+        differences (e.g., "hormigón" → "acero" also changes "HA-25" → "S275JR"),
+        all differences are replaced with a single placeholder spanning the
+        entire differing region.
         """
         if not results:
             return ""
@@ -453,8 +478,8 @@ class BrowserExtractor:
         base_text = base_result.description
         base_vars = base_result.combination.values
 
-        # Track which variables have been identified and their positions
-        identified_variables: Dict[str, Dict[str, Any]] = {}
+        # Track replacements per variable
+        variable_regions: Dict[str, List[Dict[str, Any]]] = {}
 
         # 2. Compare base against all other results
         for i in range(1, len(results)):
@@ -462,10 +487,7 @@ class BrowserExtractor:
             target_text = target_result.description
             target_vars = target_result.combination.values
 
-            # A. Find text differences (Issue 13 Logic)
-            diffs = self.template_builder.find_differences(base_text, target_text)
-
-            # B. Identify which variable changed
+            # Identify which variables changed
             var_changes = []
             for name, val in base_vars.items():
                 if name in target_vars and target_vars[name] != val:
@@ -475,28 +497,79 @@ class BrowserExtractor:
                         'new_value': target_vars[name]
                     })
 
-            # C. Map diffs to variables (Issue 14 Logic)
-            for diff in diffs:
-                if diff['type'] == 'replace':
-                    var_name = self.template_builder.map_difference_to_variable(diff, var_changes)
-                    if var_name and var_name not in identified_variables:
-                        # Find the actual old_value position in base_text
-                        old_value = None
-                        for vc in var_changes:
-                            if vc['variable_name'] == var_name:
-                                old_value = vc['old_value']
-                                break
+            if not var_changes:
+                continue
 
-                        if old_value:
-                            # Find actual position of old_value in base_text
-                            pos = base_text.find(old_value)
-                            if pos != -1:
-                                identified_variables[var_name] = {
-                                    'start': pos,
-                                    'end': pos + len(old_value),
-                                    'variable': var_name
-                                }
+            # When only ONE variable changed, find the entire differing span
+            if len(var_changes) == 1:
+                var_name = var_changes[0]['variable_name']
+                old_value = var_changes[0]['old_value']
 
-        # 3. Build Final Template (Issue 15 Logic)
-        all_replacements = list(identified_variables.values())
+                # Get the diff span (handles cascading changes)
+                diff_start, diff_end = self._find_diff_span(base_text, target_text)
+
+                # Also try to find old_value literally
+                literal_pos = base_text.find(old_value)
+
+                if literal_pos != -1:
+                    literal_start, literal_end = literal_pos, literal_pos + len(old_value)
+
+                    # Use the LARGER span to capture cascading changes
+                    # If diff span contains or extends the literal span, use diff span
+                    if diff_start <= literal_start and diff_end >= literal_end:
+                        start, end = diff_start, diff_end
+                    elif diff_end - diff_start > literal_end - literal_start:
+                        # Diff span is larger - likely has cascading changes
+                        start, end = diff_start, diff_end
+                    else:
+                        # Literal span is adequate
+                        start, end = literal_start, literal_end
+                else:
+                    # Old value not found literally - use diff span
+                    start, end = diff_start, diff_end
+
+                if start < end:  # There is a difference
+                    if var_name not in variable_regions:
+                        variable_regions[var_name] = []
+                    variable_regions[var_name].append({
+                        'start': start,
+                        'end': end,
+                        'variable': var_name
+                    })
+
+            else:
+                # Multiple variables changed - use diff-based mapping
+                diffs = self.template_builder.find_differences(base_text, target_text)
+                for diff in diffs:
+                    if diff['type'] == 'replace':
+                        var_name = self.template_builder.map_difference_to_variable(diff, var_changes)
+                        if var_name:
+                            # Find actual position of the variable's old_value
+                            old_value = next(
+                                (vc['old_value'] for vc in var_changes if vc['variable_name'] == var_name),
+                                None
+                            )
+                            if old_value:
+                                pos = base_text.find(old_value)
+                                if pos != -1:
+                                    if var_name not in variable_regions:
+                                        variable_regions[var_name] = []
+                                    variable_regions[var_name].append({
+                                        'start': pos,
+                                        'end': pos + len(old_value),
+                                        'variable': var_name
+                                    })
+
+        # 3. For each variable, use the smallest region that covers the change
+        # (to avoid over-replacing when multiple comparisons give different spans)
+        all_replacements = []
+        for var_name, regions in variable_regions.items():
+            if not regions:
+                continue
+
+            # Use the first region found (from first comparison)
+            # or could use intersection of all regions for more precision
+            all_replacements.append(regions[0])
+
+        # 4. Build Final Template (Issue 15 Logic)
         return self.template_builder.build_template(base_text, all_replacements)

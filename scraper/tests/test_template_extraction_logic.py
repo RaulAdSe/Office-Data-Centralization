@@ -423,6 +423,101 @@ Material
         assert len(material_vars) <= 1
 
 
+class TestCascadingChanges:
+    """Test cascading changes where one variable affects multiple text regions."""
+
+    def test_cascading_material_and_specs(self):
+        """Test when material change also changes specifications."""
+        from scraper.template_extraction.browser_extractor import BrowserExtractor
+
+        extractor = BrowserExtractor.__new__(BrowserExtractor)
+        extractor.template_builder = TextExtractor()
+
+        results = [
+            CombinationResult(
+                combination=VariableCombination(
+                    values={'Material': 'hormigón armado'},
+                    strategy='default'
+                ),
+                description='Pilar de hormigón armado HA-25/B/20/IIa, de 30x30 cm.',
+                success=True
+            ),
+            CombinationResult(
+                combination=VariableCombination(
+                    values={'Material': 'acero'},
+                    strategy='single_change'
+                ),
+                description='Pilar de acero S275JR, perfil HEB 200.',
+                success=True
+            ),
+        ]
+
+        template = extractor.create_dynamic_template(results)
+
+        # All cascading changes should be captured in single placeholder
+        assert template == 'Pilar de {Material}.'
+
+    def test_cascading_thermal_properties(self):
+        """Test when insulation material change also changes thermal properties."""
+        from scraper.template_extraction.browser_extractor import BrowserExtractor
+
+        extractor = BrowserExtractor.__new__(BrowserExtractor)
+        extractor.template_builder = TextExtractor()
+
+        results = [
+            CombinationResult(
+                combination=VariableCombination(
+                    values={'Material': 'EPS'},
+                    strategy='default'
+                ),
+                description='Aislamiento de EPS (poliestireno expandido) con lambda=0.036 W/mK.',
+                success=True
+            ),
+            CombinationResult(
+                combination=VariableCombination(
+                    values={'Material': 'XPS'},
+                    strategy='single_change'
+                ),
+                description='Aislamiento de XPS (poliestireno extruido) con lambda=0.034 W/mK.',
+                success=True
+            ),
+        ]
+
+        template = extractor.create_dynamic_template(results)
+
+        # All material-related changes should be captured
+        assert template == 'Aislamiento de {Material} W/mK.'
+
+    def test_simple_replacement_no_cascade(self):
+        """Test that simple replacements still work correctly."""
+        from scraper.template_extraction.browser_extractor import BrowserExtractor
+
+        extractor = BrowserExtractor.__new__(BrowserExtractor)
+        extractor.template_builder = TextExtractor()
+
+        results = [
+            CombinationResult(
+                combination=VariableCombination(
+                    values={'Material': 'hormigón'},
+                    strategy='default'
+                ),
+                description='Muro de hormigón de 30 cm',
+                success=True
+            ),
+            CombinationResult(
+                combination=VariableCombination(
+                    values={'Material': 'acero'},
+                    strategy='single_change'
+                ),
+                description='Muro de acero de 30 cm',
+                success=True
+            ),
+        ]
+
+        template = extractor.create_dynamic_template(results)
+        assert template == 'Muro de {Material} de 30 cm'
+
+
 class TestIntegration:
     """Integration tests for the complete template extraction flow."""
 
