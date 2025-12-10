@@ -9,6 +9,7 @@ Refactored with dataclasses for type safety and clean API.
 
 import sqlite3
 import re
+import os
 import bcrypt
 from typing import Optional, List, Dict, Any
 from datetime import datetime
@@ -978,3 +979,237 @@ class DatabaseManager:
         """Extract placeholder names from a template string."""
         pattern = r'\{([a-zA-Z_][a-zA-Z0-9_]*)\}'
         return re.findall(pattern, template)
+
+    # ============================================================
+    # DATABASE INITIALIZATION
+    # ============================================================
+
+    @classmethod
+    def initialize_database(
+        cls,
+        db_path: str = "office_data.db",
+        schema_path: str = "schema.sql",
+        seed_demo_data: bool = True
+    ) -> 'DatabaseManager':
+        """
+        Initialize a fresh database with schema and optional demo data.
+
+        This replaces the old gestor_db.py script.
+
+        Args:
+            db_path: Path to the database file
+            schema_path: Path to the schema.sql file
+            seed_demo_data: Whether to seed demo elements, projects, and users
+
+        Returns:
+            DatabaseManager instance connected to the new database
+
+        Usage:
+            python -c "from db_manager import DatabaseManager; DatabaseManager.initialize_database()"
+        """
+        # 1. Remove existing database
+        if os.path.exists(db_path):
+            os.remove(db_path)
+            print(f"♻️  Base de dades anterior '{db_path}' eliminada.")
+
+        # 2. Create new database with schema
+        print("📜 Llegint schema.sql...")
+        if not os.path.exists(schema_path):
+            raise FileNotFoundError(f"❌ Error: No trobo el fitxer '{schema_path}'.")
+
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+
+        with open(schema_path, "r") as f:
+            cursor.executescript(f.read())
+        print("✅ Taules creades correctament.")
+
+        if seed_demo_data:
+            cls._seed_demo_data(cursor)
+
+        conn.commit()
+        conn.close()
+
+        print("✅ BBDD Regenerada!")
+        return cls(db_path)
+
+    @classmethod
+    def _seed_demo_data(cls, cursor):
+        """Seed demo elements, projects, and users."""
+
+        # ==============================================================================
+        # ELEMENT 1: MURO CORTINA (ARQUITECTURA)
+        # ==============================================================================
+        cursor.execute(
+            "INSERT INTO elements (element_code, element_name, category) VALUES (?, ?, ?)",
+            ("MC-01", "Muro Cortina Vidrio", "ARQUITECTURA")
+        )
+        id_mc = cursor.lastrowid
+
+        # Variables
+        vars_mc = [
+            (id_mc, "tipo_vidrio", "TEXT", None, "Templado"),
+            (id_mc, "espesor_perfil", "NUMERIC", "mm", "50")
+        ]
+        cursor.executemany(
+            "INSERT INTO element_variables (element_id, variable_name, variable_type, unit, default_value) VALUES (?, ?, ?, ?, ?)",
+            vars_mc
+        )
+
+        cursor.execute(
+            "SELECT variable_id FROM element_variables WHERE element_id=? AND variable_name='tipo_vidrio'",
+            (id_mc,)
+        )
+        id_var_vidrio = cursor.fetchone()[0]
+
+        # Options for tipo_vidrio
+        opciones_vidrio = [
+            (id_var_vidrio, "Templado", 0),
+            (id_var_vidrio, "Laminado 4+4", 1),
+            (id_var_vidrio, "Doble Bajo Emisivo", 2),
+            (id_var_vidrio, "Control Solar", 3)
+        ]
+        cursor.executemany(
+            "INSERT INTO variable_options (variable_id, option_value, display_order) VALUES (?, ?, ?)",
+            opciones_vidrio
+        )
+
+        # Get variable IDs
+        cursor.execute("SELECT variable_id, variable_name FROM element_variables WHERE element_id = ?", (id_mc,))
+        dict_mc = {row[1]: row[0] for row in cursor.fetchall()}
+
+        # Template (Active S3)
+        txt_mc = "Muro cortina categoria Arquitectura amb vidre {tipo_vidrio} i perfil de {espesor_perfil} mm."
+        cursor.execute(
+            "INSERT INTO description_versions (element_id, description_template, state, is_active, version_number) VALUES (?, ?, 'S3', 1, 1)",
+            (id_mc, txt_mc)
+        )
+        ver_mc = cursor.lastrowid
+
+        # Mappings
+        map_mc = [
+            (ver_mc, dict_mc['tipo_vidrio'], '{tipo_vidrio}', 1),
+            (ver_mc, dict_mc['espesor_perfil'], '{espesor_perfil}', 2)
+        ]
+        cursor.executemany(
+            "INSERT INTO template_variable_mappings (version_id, variable_id, placeholder, position) VALUES (?, ?, ?, ?)",
+            map_mc
+        )
+
+        # ==============================================================================
+        # ELEMENT 2: PILAR (ESTRUCTURA)
+        # ==============================================================================
+        cursor.execute(
+            "INSERT INTO elements (element_code, element_name, category) VALUES (?, ?, ?)",
+            ("PIL-01", "Pilar Rectangular", "ESTRUCTURA")
+        )
+        id_pil = cursor.lastrowid
+
+        vars_pil = [
+            (id_pil, "resistencia_hormigon", "TEXT", None, "HA-25"),
+            (id_pil, "recubrimiento", "NUMERIC", "mm", "30")
+        ]
+        cursor.executemany(
+            "INSERT INTO element_variables (element_id, variable_name, variable_type, unit, default_value) VALUES (?, ?, ?, ?, ?)",
+            vars_pil
+        )
+
+        cursor.execute("SELECT variable_id, variable_name FROM element_variables WHERE element_id = ?", (id_pil,))
+        dict_pil = {row[1]: row[0] for row in cursor.fetchall()}
+
+        txt_pil = "Pilar estructural de formigó {resistencia_hormigon} amb recobriment geomètric de {recubrimiento} mm."
+        cursor.execute(
+            "INSERT INTO description_versions (element_id, description_template, state, is_active, version_number) VALUES (?, ?, 'S3', 1, 1)",
+            (id_pil, txt_pil)
+        )
+        ver_pil = cursor.lastrowid
+
+        map_pil = [
+            (ver_pil, dict_pil['resistencia_hormigon'], '{resistencia_hormigon}', 1),
+            (ver_pil, dict_pil['recubrimiento'], '{recubrimiento}', 2)
+        ]
+        cursor.executemany(
+            "INSERT INTO template_variable_mappings (version_id, variable_id, placeholder, position) VALUES (?, ?, ?, ?)",
+            map_pil
+        )
+
+        # ==============================================================================
+        # DEMO PROJECT
+        # ==============================================================================
+        cursor.execute(
+            "INSERT INTO projects (project_code, project_name) VALUES (?, ?)",
+            ("PROY-2025", "Torre Ejecutiva Norte")
+        )
+        id_proy = cursor.lastrowid
+
+        # Project element instances
+        cursor.execute(
+            "INSERT INTO project_elements (project_id, element_id, description_version_id, instance_code, instance_name) VALUES (?, ?, ?, ?, ?)",
+            (id_proy, id_mc, ver_mc, "FACH-SUR", "Fachada Principal")
+        )
+        id_inst_mc = cursor.lastrowid
+
+        cursor.execute(
+            "INSERT INTO project_elements (project_id, element_id, description_version_id, instance_code, instance_name) VALUES (?, ?, ?, ?, ?)",
+            (id_proy, id_pil, ver_pil, "PIL-CEN", "Pilar Central 01")
+        )
+        id_inst_pil = cursor.lastrowid
+
+        # Values
+        vals = [
+            (id_inst_mc, dict_mc['tipo_vidrio'], "Doble Bajo Emisivo"),
+            (id_inst_mc, dict_mc['espesor_perfil'], "80"),
+            (id_inst_pil, dict_pil['resistencia_hormigon'], "HA-30/F/20/IIa"),
+            (id_inst_pil, dict_pil['recubrimiento'], "35")
+        ]
+        cursor.executemany(
+            "INSERT INTO project_element_values (project_element_id, variable_id, value) VALUES (?, ?, ?)",
+            vals
+        )
+
+        # Initialize rendered descriptions
+        cursor.execute(
+            "INSERT INTO rendered_descriptions (project_element_id, rendered_text, is_stale) VALUES (?, '', 1)",
+            (id_inst_mc,)
+        )
+        cursor.execute(
+            "INSERT INTO rendered_descriptions (project_element_id, rendered_text, is_stale) VALUES (?, '', 1)",
+            (id_inst_pil,)
+        )
+
+        # ==============================================================================
+        # USERS (PERMISSION SYSTEM)
+        # ==============================================================================
+        # Roles:
+        # - viewer: Can only view, cannot vote
+        # - editor: Can edit and vote (1 editor vote required)
+        # - admin:  Can do everything and vote (1 admin vote required)
+        # Approval: 1 editor + 1 admin vote
+        # ==============================================================================
+        print("🔐 Generant usuaris i encriptant contrasenyes...")
+
+        def crear_usuari(username, password, full_name, role):
+            password_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
+            cursor.execute(
+                "INSERT INTO users (username, password_hash, full_name, role) VALUES (?, ?, ?, ?)",
+                (username, password_hash, full_name, role)
+            )
+
+        # Default users
+        crear_usuari("admin", "1234", "Enginyer En Cap", "admin")
+        crear_usuari("arq", "1234", "Arquitecte Projectista", "editor")
+        crear_usuari("becari", "1234", "Becari en Pràctiques", "viewer")
+
+        print("📋 Usuaris creats:")
+        print("   👑 admin  (1234) - Admin: pot votar com a administrador")
+        print("   👷 arq    (1234) - Editor: pot votar com a editor")
+        print("   👁️  becari (1234) - Viewer: només lectura, no pot votar")
+        print("🗳️ Per aprovar una versió cal: 1 vot d'editor + 1 vot d'admin")
+
+
+# ============================================================
+# CLI ENTRY POINT
+# ============================================================
+
+if __name__ == "__main__":
+    DatabaseManager.initialize_database()
