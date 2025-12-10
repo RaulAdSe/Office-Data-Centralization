@@ -44,6 +44,7 @@ CREATE TABLE approvals (
     from_state      VARCHAR(2) NOT NULL,
     to_state        VARCHAR(2) NOT NULL,
     approved_by     VARCHAR(100) NOT NULL,
+    approver_role   VARCHAR(20) NOT NULL,  -- Rol de l'usuari que vota: 'admin', 'editor'
     approved_at     DATETIME DEFAULT CURRENT_TIMESTAMP,
     comments        TEXT
 );
@@ -116,8 +117,10 @@ CREATE TABLE users (
     username        VARCHAR(50) NOT NULL UNIQUE, -- El nom per fer login (ex: 'admin')
     password_hash   TEXT NOT NULL,               -- La contrasenya encriptada
     full_name       VARCHAR(100),                -- Nom real per mostrar (ex: 'Enginyer En Cap')
-    role            VARCHAR(20) DEFAULT 'editor',-- Rol: 'admin', 'editor', 'viewer'
-    created_at      DATETIME DEFAULT CURRENT_TIMESTAMP
+    role            VARCHAR(20) DEFAULT 'editor' CHECK (role IN ('admin', 'editor', 'viewer')),
+    is_active       BOOLEAN DEFAULT 1,           -- Per desactivar usuaris sense esborrar-los
+    created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+    last_login      DATETIME                     -- Últim accés al sistema
 );
 
 -- TRIGGERS

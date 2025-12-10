@@ -160,33 +160,68 @@ def crear_nova_variable(elem_id, nom, tipus, unitat, string_opciones=None):
         conn.close()
 
 def votar_versio(version_id):
-    usuari = st.session_state.username 
-    
+    """
+    Sistema de votació basat en rols.
+    Requereix: 1 vot d'editor + 1 vot d'admin per aprovar.
+    Els viewers NO poden votar.
+    """
+    usuari = st.session_state.username
+    role = st.session_state.role
+
+    # Els viewers no poden votar
+    if role == 'viewer':
+        return False, "⛔ Els viewers no tenen permís per votar."
+
     conn = get_connection()
     c = conn.cursor()
+
+    # Comprovar si l'usuari ja ha votat
     c.execute("SELECT approval_id FROM approvals WHERE version_id = ? AND approved_by = ?", (version_id, usuari))
     if c.fetchone():
         conn.close()
         return False, "Ja has votat aquesta versió."
-    c.execute("INSERT INTO approvals (version_id, from_state, to_state, approved_by) VALUES (?, 'S0', 'S3', ?)", (version_id, usuari))
-    c.execute("SELECT COUNT(*) FROM approvals WHERE version_id = ?", (version_id,))
-    vots = c.fetchone()[0]
-    missatge = f"Vot registrat! Total vots: {vots}/3"
-    if vots >= 3:
+
+    # Inserir vot AMB EL ROL
+    c.execute("""
+        INSERT INTO approvals (version_id, from_state, to_state, approved_by, approver_role)
+        VALUES (?, 'S0', 'S3', ?, ?)
+    """, (version_id, usuari, role))
+
+    # Comptar vots per rol: necessitem 1 editor + 1 admin
+    c.execute("""
+        SELECT
+            SUM(CASE WHEN approver_role = 'editor' THEN 1 ELSE 0 END) as editor_votes,
+            SUM(CASE WHEN approver_role = 'admin' THEN 1 ELSE 0 END) as admin_votes
+        FROM approvals
+        WHERE version_id = ?
+    """, (version_id,))
+
+    result = c.fetchone()
+    editor_votes = result[0] or 0
+    admin_votes = result[1] or 0
+
+    # Comprovar si s'han complert els requisits: 1 editor + 1 admin
+    if editor_votes >= 1 and admin_votes >= 1:
+        # APROVAT! Activar aquesta versió
         c.execute("SELECT element_id FROM description_versions WHERE version_id = ?", (version_id,))
         elem_id = c.fetchone()[0]
         c.execute("UPDATE description_versions SET is_active = 0 WHERE element_id = ?", (elem_id,))
         c.execute("UPDATE description_versions SET state = 'S3', is_active = 1 WHERE version_id = ?", (version_id,))
-        missatge = "🎉 S'han assolit els 3 vots! Aquesta versió ara és l'ACTIVA (S3)."
+        missatge = "🎉 Aprovat! (1 editor + 1 admin). Aquesta versió ara és l'ACTIVA (S3)."
+    else:
+        missatge = f"✅ Vot registrat! 👷 Editors: {editor_votes}/1 | 👑 Admins: {admin_votes}/1"
+
     conn.commit()
     conn.close()
     return True, missatge
 
 def get_drafts_amb_vots(element_id):
+    """Retorna els esborranys amb el recompte de vots per rol (editor/admin)."""
     conn = get_connection()
     query = """
         SELECT dv.version_id, dv.version_number, dv.state, dv.description_template, dv.created_at,
-               COUNT(ap.approval_id) as vots
+               SUM(CASE WHEN ap.approver_role = 'editor' THEN 1 ELSE 0 END) as editor_votes,
+               SUM(CASE WHEN ap.approver_role = 'admin' THEN 1 ELSE 0 END) as admin_votes
         FROM description_versions dv
         LEFT JOIN approvals ap ON dv.version_id = ap.version_id
         WHERE dv.element_id = ? AND dv.is_active = 0
@@ -195,6 +230,9 @@ def get_drafts_amb_vots(element_id):
     """
     df = pd.read_sql(query, conn, params=(element_id,))
     conn.close()
+    # Assegurar que els valors són enters (poden ser None si no hi ha vots)
+    df['editor_votes'] = df['editor_votes'].fillna(0).astype(int)
+    df['admin_votes'] = df['admin_votes'].fillna(0).astype(int)
     return df
 
 # --- FUNCIONS PROJECTES ---
@@ -478,25 +516,45 @@ if mode == "📚 Gestió de Catàleg":
                         st.rerun()
 
         with tab2:
-            st.subheader("Control de Versions")
+            st.subheader("🗳️ Control de Versions")
+            st.caption("Per aprovar una versió cal: **1 vot d'Editor** + **1 vot d'Admin**")
+
+            # Mostrar el rol de l'usuari actual
+            current_role = st.session_state.role
+            if current_role == 'viewer':
+                st.warning("👁️ Ets **Viewer** - Només pots veure, no votar.")
+            elif current_role == 'editor':
+                st.info("👷 Ets **Editor** - Pots votar com a editor.")
+            else:
+                st.success("👑 Ets **Admin** - Pots votar com a administrador.")
+
             df_drafts = get_drafts_amb_vots(elem_id)
             if df_drafts.empty:
                 st.write("No hi ha esborranys pendents.")
             for index, row in df_drafts.iterrows():
                 with st.container(border=True):
-                    cols = st.columns([1, 4, 2])
+                    cols = st.columns([1, 3, 2, 1])
                     cols[0].write(f"### v{row['version_number']}")
                     cols[1].markdown(f"**Text:** {row['description_template']}")
-                    cols[2].progress(row['vots'] / 3, text=f"{row['vots']}/3")
-                    # BOTÓ APROVAR (JA NO DEMANA USUARI PERQUÈ L'AGAFEM DE LA SESSIÓ)
-                    if cols[2].button(f"👍 Aprovar", key=f"btn_{row['version_id']}"):
-                        ok, msg = votar_versio(row['version_id'])
-                        if ok:
-                            st.balloons()
-                            st.success(msg)
-                            st.rerun()
-                        else:
-                            st.warning(msg)
+
+                    # Mostrar progrés per rol
+                    editor_ok = "✅" if row['editor_votes'] >= 1 else "⬜"
+                    admin_ok = "✅" if row['admin_votes'] >= 1 else "⬜"
+                    cols[2].markdown(f"👷 Editor: {editor_ok} ({row['editor_votes']}/1)")
+                    cols[2].markdown(f"👑 Admin: {admin_ok} ({row['admin_votes']}/1)")
+
+                    # Botó d'aprovar (deshabilitat per viewers)
+                    if current_role == 'viewer':
+                        cols[3].button("🔒", key=f"btn_{row['version_id']}", disabled=True, help="Els viewers no poden votar")
+                    else:
+                        if cols[3].button(f"👍", key=f"btn_{row['version_id']}", help="Votar per aprovar"):
+                            ok, msg = votar_versio(row['version_id'])
+                            if ok:
+                                st.balloons()
+                                st.success(msg)
+                                st.rerun()
+                            else:
+                                st.warning(msg)
 
 elif mode == "🏗️ Gestió de Projectes":
     
