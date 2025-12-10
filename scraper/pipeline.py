@@ -215,13 +215,25 @@ class CYPEPipeline:
                         logger.warning(f"No variables extracted from {url}")
                         return None
 
+                    # Generate template with placeholders from combination results
+                    description_template = ""
+                    # Filter to only results that have descriptions
+                    results_with_desc = [r for r in results if r.description]
+                    if len(results_with_desc) >= 2:
+                        # Use create_dynamic_template to generate template with {Placeholder} variables
+                        description_template = extractor.browser_extractor.create_dynamic_template(results_with_desc)
+
+                    if not description_template and results_with_desc:
+                        # Fallback to first description if template generation fails
+                        description_template = results_with_desc[0].description
+
                     # Convert to ElementData
                     return ElementData(
                         code=self._extract_code_from_url(url),
                         title=url.split('/')[-1].replace('.html', ''),
                         variables=variables,
                         url=url,
-                        description=results[0].description if results else "",
+                        description=description_template,
                     )
 
             except Exception as e:

@@ -269,7 +269,7 @@ class BrowserExtractor:
         """Extract description from page."""
         # First, try to expand the "Pliego de condiciones" accordion
         try:
-            await page.evaluate('''() => {
+            clicked = await page.evaluate('''() => {
                 const accordions = document.querySelectorAll('.accordion-item');
                 for (const acc of accordions) {
                     const header = acc.querySelector('.accordion-button');
@@ -278,11 +278,23 @@ class BrowserExtractor:
                         // Click to expand if collapsed
                         if (header.classList.contains('collapsed')) {
                             header.click();
+                            return true;
                         }
+                        return false;  // Already expanded
                     }
                 }
+                return false;
             }''')
-            await page.wait_for_timeout(500)  # Wait for accordion animation
+
+            if clicked:
+                # Wait for accordion animation and content to load
+                await page.wait_for_timeout(1500)
+
+                # Wait for accordion body content to appear
+                try:
+                    await page.wait_for_selector('.accordion-body', state='visible', timeout=3000)
+                except Exception:
+                    pass
         except Exception:
             pass
 
@@ -355,12 +367,12 @@ class BrowserExtractor:
             const [varName, targetValue] = args;
             const fieldsets = document.querySelectorAll('fieldset');
 
-            # First pass: exact legend match
+            // First pass: exact legend match
             for (const fs of fieldsets) {
                 const legend = fs.querySelector('legend');
                 const legendText = legend?.innerText?.trim() || '';
 
-                # Exact match (case-insensitive)
+                // Exact match (case-insensitive)
                 if (legendText.toLowerCase() === varName.toLowerCase()) {
                     const radios = fs.querySelectorAll('input[type="radio"]');
                     for (const radio of radios) {
@@ -373,7 +385,7 @@ class BrowserExtractor:
                             label = radio.labels[0]?.innerText?.trim() || '';
                         }
 
-                        # Skip if already checked
+                        // Skip if already checked
                         if (radio.checked && label === targetValue) {
                             return { success: false, alreadySet: true };
                         }
@@ -386,15 +398,15 @@ class BrowserExtractor:
                 }
             }
 
-            # Second pass: partial match (for similar names)
+            // Second pass: partial match (for similar names)
             for (const fs of fieldsets) {
                 const legend = fs.querySelector('legend');
                 const legendText = legend?.innerText?.trim() || '';
 
-                # Partial match but require significant overlap
-                if (legendText.toLowerCase().includes(varName.toLowerCase()) || 
+                // Partial match but require significant overlap
+                if (legendText.toLowerCase().includes(varName.toLowerCase()) ||
                     (varName.length > 15 && varName.toLowerCase().includes(legendText.toLowerCase()))) {
-                    
+
                     const radios = fs.querySelectorAll('input[type="radio"]');
                     for (const radio of radios) {
                         let label = '';
