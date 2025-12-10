@@ -11,7 +11,7 @@ import sqlite3
 import re
 import os
 import bcrypt
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Tuple
 from datetime import datetime
 from pathlib import Path
 from contextlib import contextmanager
@@ -136,10 +136,12 @@ class VoteStatus:
 
     @property
     def needs_editor(self) -> bool:
+        """Returns True if the version still needs an editor's vote."""
         return self.editor_votes < 1
 
     @property
     def needs_admin(self) -> bool:
+        """Returns True if the version still needs an admin's vote."""
         return self.admin_votes < 1
 
 
@@ -201,6 +203,9 @@ class DatabaseManager:
 
             if row:
                 stored_hash = row['password_hash']
+                # Handle both string and bytes storage (SQLite TEXT vs BLOB)
+                if isinstance(stored_hash, str):
+                    stored_hash = stored_hash.encode('utf-8')
                 if bcrypt.checkpw(password.encode('utf-8'), stored_hash):
                     # Update last login
                     conn.execute(
@@ -280,7 +285,12 @@ class DatabaseManager:
         if role not in ('admin', 'editor', 'viewer'):
             raise ValueError(f"Invalid role: {role}. Must be admin, editor, or viewer.")
 
-        password_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
+        # Check if username already exists
+        if self.get_user_by_username(username):
+            raise ValueError(f"Username '{username}' already exists.")
+
+        # Store hash as string for SQLite TEXT column compatibility
+        password_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
 
         with self.get_connection() as conn:
             cursor = conn.execute(
@@ -658,7 +668,7 @@ class DatabaseManager:
                 is_approved=is_approved
             )
 
-    def can_user_vote(self, version_id: int, username: str, role: str) -> tuple[bool, str]:
+    def can_user_vote(self, version_id: int, username: str, role: str) -> Tuple[bool, str]:
         """
         Check if a user can vote on a version.
 
@@ -670,8 +680,19 @@ class DatabaseManager:
         Returns:
             Tuple of (can_vote, reason)
         """
+        # Validate role parameter
+        if role not in ('admin', 'editor', 'viewer'):
+            return False, f"Rol invàlid: {role}"
+
         if role == 'viewer':
             return False, "Els viewers no tenen permís per votar."
+
+        # Check version exists and is in valid state for voting
+        version = self.get_version(version_id)
+        if not version:
+            return False, "Versió no trobada."
+        if version.state != 'S0':
+            return False, f"No es pot votar una versió en estat {version.state}. Només es pot votar en estat S0 (esborrany)."
 
         with self.get_connection() as conn:
             cursor = conn.execute(
@@ -688,7 +709,7 @@ class DatabaseManager:
         version_id: int,
         username: str,
         role: str
-    ) -> tuple[bool, str, Optional[VoteStatus]]:
+    ) -> Tuple[bool, str, Optional[VoteStatus]]:
         """
         Cast a vote for a version.
 
@@ -967,7 +988,7 @@ class DatabaseManager:
             # Replace placeholders
             def replace_placeholder(match):
                 var_name = match.group(1)
-                return values.get(var_name, '')
+                return values.get(var_name, f'[MISSING:{var_name}]')
 
             return re.sub(r'\{([a-zA-Z_][a-zA-Z0-9_]*)\}', replace_placeholder, template)
 
@@ -1189,7 +1210,8 @@ class DatabaseManager:
         print("🔐 Generant usuaris i encriptant contrasenyes...")
 
         def crear_usuari(username, password, full_name, role):
-            password_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
+            # Store hash as string for SQLite TEXT column compatibility
+            password_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
             cursor.execute(
                 "INSERT INTO users (username, password_hash, full_name, role) VALUES (?, ?, ?, ?)",
                 (username, password_hash, full_name, role)

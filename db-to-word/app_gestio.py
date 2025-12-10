@@ -179,7 +179,7 @@ def votar_versio(version_id):
     c.execute("SELECT approval_id FROM approvals WHERE version_id = ? AND approved_by = ?", (version_id, usuari))
     if c.fetchone():
         conn.close()
-        return False, "Ja has votat aquesta versió."
+        return False, "⚠️ Ja has votat aquesta versió."
 
     # Inserir vot AMB EL ROL
     c.execute("""
