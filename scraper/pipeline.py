@@ -317,9 +317,9 @@ class CYPEPipeline:
                     options=options
                 )
 
-            # Store description template
+            # Store description template with variable mappings
             if element.description:
-                self._store_description_template(element_id, element.description)
+                self._store_description_template(element_id, element.description, element.variables)
 
             return True
 
@@ -369,15 +369,43 @@ class CYPEPipeline:
         # Default fallback
         return 'OBRA CIVIL'
 
-    def _store_description_template(self, element_id: int, description: str):
-        """Store description as a template."""
+    def _store_description_template(self, element_id: int, description: str, variables: List = None):
+        """Store description as a template and create variable mappings."""
+        import re
+
         with self.db_manager.get_connection() as conn:
-            conn.execute(
+            # Insert template
+            cursor = conn.execute(
                 """INSERT INTO description_versions
                    (element_id, version_number, description_template, state, is_active, created_by, created_at)
                    VALUES (?, 1, ?, 'S3', 1, 'pipeline', datetime('now'))""",
                 (element_id, description)
             )
+            version_id = cursor.lastrowid
+
+            # Extract placeholders and create mappings
+            if variables:
+                placeholders = re.findall(r'\{([^}]+)\}', description)
+                var_name_to_id = {}
+
+                # Get variable IDs for this element
+                var_rows = conn.execute(
+                    "SELECT variable_id, variable_name FROM element_variables WHERE element_id = ?",
+                    (element_id,)
+                ).fetchall()
+                for var_id, var_name in var_rows:
+                    var_name_to_id[var_name] = var_id
+
+                # Create mappings for each placeholder
+                for position, placeholder in enumerate(placeholders):
+                    if placeholder in var_name_to_id:
+                        conn.execute(
+                            """INSERT OR IGNORE INTO template_variable_mappings
+                               (version_id, variable_id, placeholder, position, created_at)
+                               VALUES (?, ?, ?, ?, datetime('now'))""",
+                            (version_id, var_name_to_id[placeholder], placeholder, position)
+                        )
+
             conn.commit()
 
     async def run(
