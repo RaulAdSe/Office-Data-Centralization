@@ -2,8 +2,8 @@ import streamlit as st
 import sqlite3
 import pandas as pd
 import os
-import bcrypt
 import time
+import streamlit_authenticator as stauth
 
 # Configuració BBDD
 if os.path.exists("office_data.db"):
@@ -17,82 +17,98 @@ else:
 st.set_page_config(page_title="Gestor Partides", page_icon="🏗️", layout="wide")
 
 # ==============================================================================
-# 1. GESTIÓ D'USUARIS I SESSIÓ
+# 1. GESTIÓ D'USUARIS (INTEGRACIÓ STREAMLIT-AUTHENTICATOR)
 # ==============================================================================
 
 def get_connection():
     return sqlite3.connect(DB_NAME)
 
-def verificar_credencials(username, password):
-    """Verifica l'usuari i la contrasenya contra la BBDD."""
+def get_user_role(username):
+    """Recupera el rol de l'usuari des de la BBDD."""
     conn = get_connection()
     c = conn.cursor()
-    c.execute("SELECT password_hash, full_name, role FROM users WHERE username = ?", (username,))
-    result = c.fetchone()
+    c.execute("SELECT role FROM users WHERE username = ?", (username,))
+    res = c.fetchone()
     conn.close()
-    
-    if result:
-        stored_hash = result[0]
-        full_name = result[1]
-        role = result[2]
-        
-        # Comprovem el hash (bcrypt necessita bytes)
-        if bcrypt.checkpw(password.encode('utf-8'), stored_hash):
-            return True, full_name, role
-            
-    return False, None, None
+    return res[0] if res else "viewer"
 
-# --- PANTALLA DE LOGIN ---
-if "logged_in" not in st.session_state:
-    st.session_state.logged_in = False
+def carregar_config_usuaris():
+    """
+    Llegeix la taula 'users' de SQLite i la converteix al format 
+    de diccionari que necessita streamlit-authenticator.
+    """
+    conn = get_connection()
+    df_users = pd.read_sql("SELECT username, password_hash, full_name FROM users", conn)
+    conn.close()
 
-if not st.session_state.logged_in:
-    # DISSENY DEL LOGIN (CENTRAT)
-    col1, col2, col3 = st.columns([1, 2, 1])
+    # Construïm l'estructura de credencials
+    credentials = {"usernames": {}}
     
-    with col2:
-        st.title("🔐 Accés al Sistema")
-        st.markdown("Introdueix les teves credencials corporatives.")
-        
-        # EL FORMULARI CLAU PER A GUARDAR CONTRASENYES
-        with st.form("login_form"):
-            user_input = st.text_input("Usuari")
-            pass_input = st.text_input("Contrasenya", type="password")
-            
-            submit_login = st.form_submit_button("Entrar", type="primary")
-            
-            if submit_login:
-                valid, name, role = verificar_credencials(user_input, pass_input)
-                
-                if valid:
-                    st.session_state.logged_in = True
-                    st.session_state.username = user_input
-                    st.session_state.full_name = name
-                    st.session_state.role = role
-                    st.success(f"Benvingut/da, {name}!")
-                    time.sleep(0.5)
-                    st.rerun()
-                else:
-                    st.error("Usuari o contrasenya incorrectes.")
+    for _, row in df_users.iterrows():
+        # Assegurar que el hash és string i no bytes
+        pwd_hash = row["password_hash"]
+        if isinstance(pwd_hash, bytes):
+            pwd_hash = pwd_hash.decode('utf-8')
+
+        credentials["usernames"][row["username"]] = {
+            "name": row["full_name"],
+            "password": pwd_hash, 
+        }
     
-    # ATUREM L'EXECUCIÓ AQUÍ SI NO ESTÀ LOGUEJAT
+    return credentials
+
+# --- CONFIGURACIÓ DE L'AUTENTICADOR ---
+
+# 1. Carreguem usuaris de la BBDD
+users_config = carregar_config_usuaris()
+
+# 2. Configurem la cookie i l'autenticador
+authenticator = stauth.Authenticate(
+    credentials=users_config,
+    cookie_name='cype_gestor_cookie', 
+    key='clau_super_secreta_i_aleatoria', 
+    cookie_expiry_days=7, 
+)
+
+# 3. WIDGET DE LOGIN (NOVA SINTAXI)
+authenticator.login('main')
+
+# --- LOGICA DE CONTROL D'ACCÉS ---
+
+if st.session_state["authentication_status"] is False:
+    st.error('Usuari o contrasenya incorrectes')
+    st.stop()
+    
+elif st.session_state["authentication_status"] is None:
+    st.warning('Si us plau, introdueix les teves credencials.')
     st.stop()
 
-# ==============================================================================
-# 2. APP PRINCIPAL (NOMÉS ACCESSIBLE SI ESTÀS LOGUEJAT)
-# ==============================================================================
+elif st.session_state["authentication_status"] is True:
+    # L'usuari ha entrat correctament!
+    
+    username = st.session_state["username"]
+    name = st.session_state["name"]
+    
+    # Recuperem el rol que no el gestiona la cookie, sinó la BBDD
+    if "role" not in st.session_state:
+        st.session_state.role = get_user_role(username)
+        # Guardem manualment altres dades si cal
+        st.session_state.full_name = name
 
-# --- SIDEBAR AMB INFO D'USUARI ---
-with st.sidebar:
-    st.info(f"👤 **{st.session_state.full_name}**\nRol: {st.session_state.role}")
-    if st.button("Tancar Sessió"):
-        st.session_state.logged_in = False
-        st.rerun()
-    st.divider()
+    # --- SIDEBAR AMB LOGOUT ---
+    with st.sidebar:
+        st.info(f"👤 **{name}**\nRol: {st.session_state.role}")
+        
+        # Botó de Logout natiu
+        authenticator.logout('Tancar Sessió', 'sidebar')
+        st.divider()
+
+# ==============================================================================
+# 2. APP PRINCIPAL (NOMÉS S'EXECUTA SI LOGUEJAT)
+# ==============================================================================
 
 # --- FUNCIONS BBDD (APP) ---
 
-# --- FUNCIONS CATÀLEG ---
 def get_elements():
     conn = get_connection()
     query = """
@@ -160,6 +176,7 @@ def crear_nova_variable(elem_id, nom, tipus, unitat, string_opciones=None):
         conn.close()
 
 def votar_versio(version_id):
+    # FEM SERVIR L'USUARI REAL DE LA SESSIÓ
     usuari = st.session_state.username 
     
     conn = get_connection()
@@ -197,7 +214,6 @@ def get_drafts_amb_vots(element_id):
     conn.close()
     return df
 
-# --- FUNCIONS PROJECTES ---
 def get_projects():
     conn = get_connection()
     df = pd.read_sql("SELECT project_id, project_code, project_name FROM projects", conn)
@@ -317,7 +333,7 @@ def save_instance_values(project_element_id, updates_dict):
         conn.close()
 
 # ==============================================================================
-# 3. INTERFÍCIE PRINCIPAL (NOMÉS SI LOGUEJAT)
+# 3. INTERFÍCIE PRINCIPAL
 # ==============================================================================
 
 st.sidebar.title("🏗️ Gestor CYPE")
@@ -488,7 +504,6 @@ if mode == "📚 Gestió de Catàleg":
                     cols[0].write(f"### v{row['version_number']}")
                     cols[1].markdown(f"**Text:** {row['description_template']}")
                     cols[2].progress(row['vots'] / 3, text=f"{row['vots']}/3")
-                    # BOTÓ APROVAR (JA NO DEMANA USUARI PERQUÈ L'AGAFEM DE LA SESSIÓ)
                     if cols[2].button(f"👍 Aprovar", key=f"btn_{row['version_id']}"):
                         ok, msg = votar_versio(row['version_id'])
                         if ok:
