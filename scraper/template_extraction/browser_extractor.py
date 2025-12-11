@@ -2,7 +2,7 @@
 Playwright-based variable extraction from CYPE pages.
 """
 
-from typing import List, Tuple, Dict, Any
+from typing import List, Tuple, Dict, Any, Optional
 from scraper.models import ElementVariable, VariableType, VariableCombination, CombinationResult
 from .text_extractor import TextVariableExtractor, TextExtractor
 
@@ -240,26 +240,72 @@ class BrowserExtractor:
 
     async def _extract_form_variables(self, page) -> List[ElementVariable]:
         """Extract variables from form elements."""
+        import re
         variables = []
+        seen_names = set()
 
-        # Extract from fieldsets
+        def dedupe_options(options: List[str]) -> List[str]:
+            """Remove duplicate options while preserving order."""
+            seen = set()
+            result = []
+            for opt in options:
+                if opt not in seen:
+                    seen.add(opt)
+                    result.append(opt)
+            return result
+
+        def parse_name_and_unit(raw_name: str) -> Tuple[str, Optional[str]]:
+            """
+            Extract unit from variable name if present.
+            E.g., "Sección media (cm)" -> ("Sección media", "cm")
+                  "Altura libre de planta" -> ("Altura libre de planta", None)
+            """
+            # Match pattern like "Name (unit)" where unit is typically short
+            match = re.match(r'^(.+?)\s*\(([^)]{1,20})\)\s*$', raw_name)
+            if match:
+                name = match.group(1).strip()
+                unit = match.group(2).strip()
+                return name, unit
+            return raw_name, None
+
+        # Extract from fieldsets (deduplicate by merging options)
         fieldset_data = await page.evaluate(JS_EXTRACT_FIELDSETS)
         for data in fieldset_data:
-            variables.append(ElementVariable(
-                name=data['name'],
-                variable_type=VariableType.RADIO,
-                options=data['options'],
-                source="form"
-            ))
+            raw_name = data['name']
+            name, unit = parse_name_and_unit(raw_name)
+            options = dedupe_options(data['options'])
+
+            if name in seen_names:
+                # Merge options with existing variable
+                for v in variables:
+                    if v.name == name:
+                        existing_opts = set(v.options)
+                        for opt in options:
+                            if opt not in existing_opts:
+                                v.options.append(opt)
+                        break
+            else:
+                seen_names.add(name)
+                variables.append(ElementVariable(
+                    name=name,
+                    variable_type=VariableType.RADIO,
+                    options=options,
+                    unit=unit,
+                    source="form"
+                ))
 
         # Extract from selects
         select_data = await page.evaluate(JS_EXTRACT_SELECTS)
         for data in select_data:
-            if not any(v.name == data['name'] for v in variables):
+            raw_name = data['name']
+            name, unit = parse_name_and_unit(raw_name)
+            if name not in seen_names:
+                seen_names.add(name)
                 variables.append(ElementVariable(
-                    name=data['name'],
+                    name=name,
                     variable_type=VariableType.SELECT,
-                    options=data['options'],
+                    options=dedupe_options(data['options']),
+                    unit=unit,
                     source="form"
                 ))
 
@@ -472,6 +518,65 @@ class BrowserExtractor:
 
         return start, end
 
+    def _find_change_position(self, base_text: str, target_text: str,
+                               old_value: str, new_value: str) -> Optional[int]:
+        """
+        Find the position where old_value was replaced by new_value.
+
+        This handles the case where old_value appears multiple times in the text
+        by checking which occurrence was actually changed to new_value.
+
+        Returns the position of old_value in base_text, or None if not found.
+        Returns None if the variable change doesn't actually affect the description text.
+        """
+        if not old_value or not new_value:
+            return None
+
+        # First, check if the texts are actually different
+        if base_text == target_text:
+            # Variable change doesn't affect description - skip
+            return None
+
+        # Find all occurrences of old_value in base_text
+        positions = []
+        pos = 0
+        while True:
+            pos = base_text.find(old_value, pos)
+            if pos == -1:
+                break
+            positions.append(pos)
+            pos += 1
+
+        if not positions:
+            return None
+
+        # For each position, check if new_value appears at the same position in target
+        for pos in positions:
+            # Check if new_value appears at approximately the same position in target
+            search_start = max(0, pos - 5)
+            search_end = min(len(target_text), pos + len(new_value) + 5)
+            search_region = target_text[search_start:search_end]
+
+            if new_value in search_region:
+                # Verify context matches (character before and after)
+                before_base = base_text[pos - 1] if pos > 0 else ''
+                after_base = base_text[pos + len(old_value)] if pos + len(old_value) < len(base_text) else ''
+
+                # Find new_value position in target within the search region
+                target_pos = target_text.find(new_value, search_start)
+                if target_pos != -1 and target_pos < search_end:
+                    before_target = target_text[target_pos - 1] if target_pos > 0 else ''
+                    after_target = target_text[target_pos + len(new_value)] if target_pos + len(new_value) < len(target_text) else ''
+
+                    # Context matches - this is the correct position
+                    if before_base == before_target and after_base == after_target:
+                        return pos
+
+        # No matching position found with context verification
+        # This means the variable change doesn't directly affect the text
+        # (e.g., the variable value doesn't appear literally in the description)
+        return None
+
     def create_dynamic_template(self, results: List[CombinationResult]) -> str:
         """
         Process scraping results to create a final template with placeholders.
@@ -512,42 +617,27 @@ class BrowserExtractor:
             if not var_changes:
                 continue
 
-            # When only ONE variable changed, find the entire differing span
+            # When only ONE variable changed, find where to place the placeholder
             if len(var_changes) == 1:
                 var_name = var_changes[0]['variable_name']
                 old_value = var_changes[0]['old_value']
+                new_value = var_changes[0]['new_value']
 
-                # Get the diff span (handles cascading changes)
-                diff_start, diff_end = self._find_diff_span(base_text, target_text)
+                # Find where the change actually occurred by comparing texts
+                # This is more reliable than searching for the old value (which may appear multiple times)
+                change_pos = self._find_change_position(base_text, target_text, old_value, new_value)
 
-                # Also try to find old_value literally
-                literal_pos = base_text.find(old_value)
+                if change_pos is not None:
+                    start, end = change_pos, change_pos + len(old_value)
 
-                if literal_pos != -1:
-                    literal_start, literal_end = literal_pos, literal_pos + len(old_value)
-
-                    # Use the LARGER span to capture cascading changes
-                    # If diff span contains or extends the literal span, use diff span
-                    if diff_start <= literal_start and diff_end >= literal_end:
-                        start, end = diff_start, diff_end
-                    elif diff_end - diff_start > literal_end - literal_start:
-                        # Diff span is larger - likely has cascading changes
-                        start, end = diff_start, diff_end
-                    else:
-                        # Literal span is adequate
-                        start, end = literal_start, literal_end
-                else:
-                    # Old value not found literally - use diff span
-                    start, end = diff_start, diff_end
-
-                if start < end:  # There is a difference
-                    if var_name not in variable_regions:
-                        variable_regions[var_name] = []
-                    variable_regions[var_name].append({
-                        'start': start,
-                        'end': end,
-                        'variable': var_name
-                    })
+                    if start < end:  # Valid region
+                        if var_name not in variable_regions:
+                            variable_regions[var_name] = []
+                        variable_regions[var_name].append({
+                            'start': start,
+                            'end': end,
+                            'variable': var_name
+                        })
 
             else:
                 # Multiple variables changed - use diff-based mapping

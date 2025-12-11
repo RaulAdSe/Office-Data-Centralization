@@ -245,10 +245,20 @@ class CYPEPipeline:
         return None
 
     def _extract_code_from_url(self, url: str) -> str:
-        """Extract element code from URL."""
+        """Extract element code from URL. E.g., NVQ010 from NVQ010_Aislamiento_termico..."""
         import re
-        match = re.search(r'/([A-Z]{2,3}[A-Z0-9]+)(?:\.html)?$', url, re.IGNORECASE)
-        return match.group(1).upper() if match else "UNKNOWN"
+
+        # Get the filename from URL
+        filename = url.split('/')[-1].replace('.html', '')
+
+        # Extract code before first underscore (e.g., NVQ010_Aislamiento... -> NVQ010)
+        if '_' in filename:
+            code = filename.split('_')[0].upper()
+            if code:
+                return code
+
+        # Fallback: use filename
+        return filename[:20].upper() or "UNKNOWN"
 
     @property
     def db_manager(self):
