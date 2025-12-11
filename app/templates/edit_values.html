@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+
+{% block title %}Edit Values - Office Variable System{% endblock %}
+
+{% block content %}
+<h1>Edit Variable Values</h1>
+<h2>{{ pe_info[4] }}{% if pe_info[3] %} - {{ pe_info[3] }}{% endif %}</h2>
+<h3 style="color: #2c5aa0; margin-top: 5px;">{{ pe_info[7] }}</h3>
+<div class="element-code">{{ pe_info[6] }}</div>
+
+<form method="POST">
+    {% for var in variables %}
+    <div class="form-group">
+        <label for="var_{{ var.variable_name }}">
+            {{ var.variable_name }}
+            {% if var.is_required %}<span class="required">*</span>{% endif %}
+            {% if var.unit %}({{ var.unit }}){% endif %}
+        </label>
+        
+        {% set current_value = current_values.get(var.variable_name, var.default_value or '') %}
+        
+        {% if var.options %}
+        <!-- Show dropdown for variables with options -->
+        <select id="var_{{ var.variable_name }}" 
+                name="var_{{ var.variable_name }}" 
+                {% if var.is_required %}required{% endif %}>
+            <option value="">-- Select {{ var.variable_name }} --</option>
+            {% for option in var.options %}
+            <option value="{{ option }}" 
+                    {% if option == current_value %}selected{% endif %}>
+                {{ option }}
+            </option>
+            {% endfor %}
+        </select>
+        {% elif var.variable_type == 'TEXT' %}
+        <input type="text" 
+               id="var_{{ var.variable_name }}" 
+               name="var_{{ var.variable_name }}" 
+               value="{{ current_value }}"
+               {% if var.is_required %}required{% endif %}>
+        {% elif var.variable_type == 'NUMERIC' %}
+        <input type="number" 
+               step="any"
+               id="var_{{ var.variable_name }}" 
+               name="var_{{ var.variable_name }}" 
+               value="{{ current_value }}"
+               {% if var.is_required %}required{% endif %}>
+        {% elif var.variable_type == 'DATE' %}
+        <input type="date" 
+               id="var_{{ var.variable_name }}" 
+               name="var_{{ var.variable_name }}" 
+               value="{{ current_value }}"
+               {% if var.is_required %}required{% endif %}>
+        {% else %}
+        <input type="text" 
+               id="var_{{ var.variable_name }}" 
+               name="var_{{ var.variable_name }}" 
+               value="{{ current_value }}"
+               {% if var.is_required %}required{% endif %}>
+        {% endif %}
+        
+        {% if var.default_value %}
+        <small>Default: {{ var.default_value }}</small>
+        {% endif %}
+    </div>
+    {% endfor %}
+    
+    <button type="submit" class="btn">Save Values</button>
+    <a href="/project/{{ pe_info[-1] }}" class="btn" style="background: #666;">Cancel</a>
+</form>
+
+<h3>Current Rendered Description:</h3>
+<div class="rendered">{{ rendered }}</div>
+
+<script>
+// Live preview of rendering (optional enhancement)
+// This would require AJAX calls to /api/render endpoint
+</script>
+{% endblock %}

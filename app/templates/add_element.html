@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+
+{% block title %}Add Element to Project - Office Variable System{% endblock %}
+
+{% block content %}
+<h1>Add Element to Project</h1>
+
+<form method="POST">
+    <div class="form-group">
+        <label for="element_code">Select Element:</label>
+        <select id="element_code" name="element_code" required>
+            <option value="">Choose an element...</option>
+            {% for element in elements %}
+            <option value="{{ element.element_code }}">{{ element.element_name }} ({{ element.element_code }})</option>
+            {% endfor %}
+        </select>
+    </div>
+    
+    <div class="form-group">
+        <label for="instance_code">Instance Code:</label>
+        <input type="text" id="instance_code" name="instance_code" required placeholder="e.g., WALL-001, BEAM-A1">
+        <small>Unique identifier for this specific element in the project</small>
+    </div>
+    
+    <div class="form-group">
+        <label for="instance_name">Instance Name (optional):</label>
+        <input type="text" id="instance_name" name="instance_name" placeholder="e.g., North Exterior Wall">
+    </div>
+    
+    <button type="submit" class="btn">Add Element</button>
+    <a href="/project/{{ project_id }}" class="btn" style="background: #666;">Cancel</a>
+</form>
+
+<script>
+// Add search functionality to select
+document.getElementById('element_code').addEventListener('input', function(e) {
+    const filter = e.target.value.toLowerCase();
+    const options = e.target.options;
+    for (let i = 0; i < options.length; i++) {
+        const option = options[i];
+        const text = option.text.toLowerCase();
+        if (text.includes(filter) || filter === '') {
+            option.style.display = '';
+        } else {
+            option.style.display = 'none';
+        }
+    }
+});
+</script>
+{% endblock %}
