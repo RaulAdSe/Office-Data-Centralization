@@ -2,24 +2,15 @@
 Template extraction module for CYPE construction elements.
 
 Usage:
-    from scraper.template_extraction import CYPEExtractor, CombinationGenerator
+    from scraper.template_extraction import CYPEExtractor
 
-    # With browser automation
+    # Extract variables and descriptions from a CYPE page
     async with CYPEExtractor() as extractor:
         variables, results = await extractor.extract(url)
 
-    # Just combination generation
-    generator = CombinationGenerator()
-    combinations = generator.generate(variables)
-
-    # Validate extraction results
-    from scraper.template_extraction import validate_extraction_results
-    validation = validate_extraction_results(variables, results)
-
-    # Database integration
-    from scraper.template_extraction import TemplateDbIntegrator
-    integrator = TemplateDbIntegrator(db_path)
-    result = integrator.integrate_template(template, element_id)
+    # Create template from description (simple search-replace)
+    from scraper.template_extraction.simple_template import create_template
+    result = create_template(description, {"Resistencia": "25", ...})
 """
 
 # Import from unified models
@@ -33,24 +24,7 @@ from scraper.models import (
 from .text_extractor import TextVariableExtractor, TextExtractor
 from .browser_extractor import BrowserExtractor
 from .combination_generator import CombinationGenerator, CYPEExtractor
-from .template_validator import (
-    TemplateValidator,
-    ValidationResult,
-    DescriptionData,
-    ExtractedTemplate,
-    validate_extraction_results,
-    # Domain knowledge exports
-    MATERIAL_SYNONYMS,
-    LOCATION_SYNONYMS,
-    UNIT_SYNONYMS,
-    ABBREVIATIONS,
-    fuzzy_match,
-    remove_accents,
-)
-from .template_db_integrator import (
-    TemplateDbIntegrator,
-    TemplateMappingResult,
-)
+from .simple_template import create_template, create_template_from_element, TemplateResult
 
 # Backwards compatibility
 BrowserCombinationGenerator = CYPEExtractor
@@ -59,7 +33,7 @@ __all__ = [
     # Models (from unified scraper.models)
     'VariableType',
     'ElementVariable',
-    'ExtractedVariable',  # Backwards compatibility alias
+    'ExtractedVariable',
     'VariableCombination',
     'CombinationResult',
     # Extractors
@@ -69,20 +43,8 @@ __all__ = [
     'CombinationGenerator',
     'CYPEExtractor',
     'BrowserCombinationGenerator',
-    # Validation
-    'TemplateValidator',
-    'ValidationResult',
-    'DescriptionData',
-    'ExtractedTemplate',
-    'validate_extraction_results',
-    # Database integration
-    'TemplateDbIntegrator',
-    'TemplateMappingResult',
-    # Domain knowledge
-    'MATERIAL_SYNONYMS',
-    'LOCATION_SYNONYMS',
-    'UNIT_SYNONYMS',
-    'ABBREVIATIONS',
-    'fuzzy_match',
-    'remove_accents',
+    # Simple template creation
+    'create_template',
+    'create_template_from_element',
+    'TemplateResult',
 ]

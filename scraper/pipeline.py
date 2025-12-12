@@ -94,7 +94,6 @@ class CYPEPipeline:
         self._crawler = None
         self._static_extractor = None
         self._browser_extractor = None
-        self._db_integrator = None
 
     def _setup_logging(self):
         """Configure logging for the pipeline."""
@@ -135,14 +134,6 @@ class CYPEPipeline:
         if self._browser_extractor is not None:
             await self._browser_extractor.__aexit__(None, None, None)
             self._browser_extractor = None
-
-    @property
-    def db_integrator(self):
-        """Lazy-load the database integrator."""
-        if self._db_integrator is None:
-            from scraper.template_extraction import TemplateDbIntegrator
-            self._db_integrator = TemplateDbIntegrator(self.config.db_path)
-        return self._db_integrator
 
     def discover_elements(self, max_elements: Optional[int] = None) -> List[str]:
         """
