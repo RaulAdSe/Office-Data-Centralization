@@ -340,5 +340,20 @@ INSERT INTO construction_categories (category_name, display_order, logical_group
 CREATE INDEX idx_construction_categories_name ON construction_categories(category_name);
 
 -- ============================================================
+-- PART 7: USER AUTHENTICATION
+-- ============================================================
+
+CREATE TABLE users (
+    user_id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    username        VARCHAR(50) NOT NULL UNIQUE,
+    password_hash   TEXT NOT NULL,
+    full_name       VARCHAR(100),
+    role            VARCHAR(20) DEFAULT 'editor' CHECK (role IN ('admin', 'editor', 'viewer')),
+    created_at      DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_users_username ON users(username);
+
+-- ============================================================
 -- END OF SCHEMA
 -- ============================================================

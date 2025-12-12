@@ -6,12 +6,12 @@ import time
 import streamlit_authenticator as stauth
 
 # Configuració BBDD
-if os.path.exists("office_data.db"):
-    DB_NAME = "office_data.db"
-elif os.path.exists("../office_data.db"):
-    DB_NAME = "../office_data.db"
-else:
-    st.error("❌ No trobo office_data.db. Executa gestor_db.py primer.")
+# Main database location: office_variable_demo/office_data.db
+_script_dir = os.path.dirname(os.path.abspath(__file__))
+DB_NAME = os.path.join(_script_dir, "..", "office_variable_demo", "office_data.db")
+
+if not os.path.exists(DB_NAME):
+    st.error("❌ No trobo office_data.db a office_variable_demo/")
     st.stop()
 
 st.set_page_config(page_title="Gestor Partides", page_icon="🏗️", layout="wide")
