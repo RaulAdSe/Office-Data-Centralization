@@ -2,26 +2,113 @@ import streamlit as st
 import sqlite3
 import pandas as pd
 import os
+import time
+import streamlit_authenticator as stauth
 
 # Configuració BBDD
-if os.path.exists("office_data.db"):
-    DB_NAME = "office_data.db"
-elif os.path.exists("../office_data.db"):
-    DB_NAME = "../office_data.db"
-else:
-    st.error("❌ No trobo office_data.db. Executa gestor_db.py primer.")
+# Main database location: office_variable_demo/office_data.db
+_script_dir = os.path.dirname(os.path.abspath(__file__))
+DB_NAME = os.path.join(_script_dir, "..", "office_variable_demo", "office_data.db")
+
+if not os.path.exists(DB_NAME):
+    st.error("❌ No trobo office_data.db a office_variable_demo/")
     st.stop()
 
 st.set_page_config(page_title="Gestor Partides", page_icon="🏗️", layout="wide")
 
 # ==============================================================================
-# 1. FUNCIONS BASE DE DADES
+# 1. GESTIÓ D'USUARIS (INTEGRACIÓ STREAMLIT-AUTHENTICATOR)
 # ==============================================================================
 
 def get_connection():
     return sqlite3.connect(DB_NAME)
 
-# --- FUNCIONS CATÀLEG ---
+def get_user_role(username):
+    """Recupera el rol de l'usuari des de la BBDD."""
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("SELECT role FROM users WHERE username = ?", (username,))
+    res = c.fetchone()
+    conn.close()
+    return res[0] if res else "viewer"
+
+def carregar_config_usuaris():
+    """
+    Llegeix la taula 'users' de SQLite i la converteix al format 
+    de diccionari que necessita streamlit-authenticator.
+    """
+    conn = get_connection()
+    df_users = pd.read_sql("SELECT username, password_hash, full_name FROM users", conn)
+    conn.close()
+
+    # Construïm l'estructura de credencials
+    credentials = {"usernames": {}}
+    
+    for _, row in df_users.iterrows():
+        # Assegurar que el hash és string i no bytes
+        pwd_hash = row["password_hash"]
+        if isinstance(pwd_hash, bytes):
+            pwd_hash = pwd_hash.decode('utf-8')
+
+        credentials["usernames"][row["username"]] = {
+            "name": row["full_name"],
+            "password": pwd_hash, 
+        }
+    
+    return credentials
+
+# --- CONFIGURACIÓ DE L'AUTENTICADOR ---
+
+# 1. Carreguem usuaris de la BBDD
+users_config = carregar_config_usuaris()
+
+# 2. Configurem la cookie i l'autenticador
+authenticator = stauth.Authenticate(
+    credentials=users_config,
+    cookie_name='cype_gestor_cookie', 
+    key='clau_super_secreta_i_aleatoria', 
+    cookie_expiry_days=7, 
+)
+
+# 3. WIDGET DE LOGIN (NOVA SINTAXI)
+authenticator.login('main')
+
+# --- LOGICA DE CONTROL D'ACCÉS ---
+
+if st.session_state["authentication_status"] is False:
+    st.error('Usuari o contrasenya incorrectes')
+    st.stop()
+    
+elif st.session_state["authentication_status"] is None:
+    st.warning('Si us plau, introdueix les teves credencials.')
+    st.stop()
+
+elif st.session_state["authentication_status"] is True:
+    # L'usuari ha entrat correctament!
+    
+    username = st.session_state["username"]
+    name = st.session_state["name"]
+    
+    # Recuperem el rol que no el gestiona la cookie, sinó la BBDD
+    if "role" not in st.session_state:
+        st.session_state.role = get_user_role(username)
+        # Guardem manualment altres dades si cal
+        st.session_state.full_name = name
+
+    # --- SIDEBAR AMB LOGOUT ---
+    with st.sidebar:
+        st.info(f"👤 **{name}**\nRol: {st.session_state.role}")
+        
+        # Botó de Logout natiu
+        authenticator.logout('Tancar Sessió', 'sidebar')
+        st.divider()
+
+# ==============================================================================
+# 2. APP PRINCIPAL (NOMÉS S'EXECUTA SI LOGUEJAT)
+# ==============================================================================
+
+# --- FUNCIONS BBDD (APP) ---
+
 def get_elements():
     conn = get_connection()
     query = """
@@ -43,38 +130,23 @@ def crear_opciones_variable(conn, variable_id, string_opciones):
         conn.executemany("INSERT INTO variable_options (variable_id, option_value, display_order) VALUES (?, ?, ?)", datos_insert)
 
 def crear_element_complet(codi, nom, categoria, llista_variables, text_plantilla):
-    """
-    Crea l'element, les seves variables (des d'una llista de diccionaris) i la primera versió.
-    """
     conn = get_connection()
     try:
         c = conn.cursor()
-        
-        # 1. Crear Element Base
         c.execute("INSERT INTO elements (element_code, element_name, category) VALUES (?, ?, ?)", (codi, nom, categoria))
         elem_id = c.lastrowid
         
-        # 2. Crear Variables (Iterant la llista temporal)
         for var in llista_variables:
-            # Mapegem el tipus visual al tipus de BBDD
             tipus_db = "TEXT" if var["tipus"] == "LLISTA (Desplegable)" else var["tipus"]
-            
-            c.execute("""
-                INSERT INTO element_variables (element_id, variable_name, variable_type, unit) 
-                VALUES (?, ?, ?, ?)
-            """, (elem_id, var["nom"], tipus_db, var["unitat"]))
+            c.execute("INSERT INTO element_variables (element_id, variable_name, variable_type, unit) VALUES (?, ?, ?, ?)", 
+                      (elem_id, var["nom"], tipus_db, var["unitat"]))
             var_id = c.lastrowid
-            
-            # Insertar opcions si n'hi ha
             if var["opcions"]:
                 crear_opciones_variable(conn, var_id, var["opcions"])
         
-        # 3. Crear Primera Versió (S0)
         if text_plantilla:
-            c.execute("""
-                INSERT INTO description_versions (element_id, description_template, state, is_active, version_number)
-                VALUES (?, ?, 'S0', 0, 1)
-            """, (elem_id, text_plantilla, ))
+            c.execute("INSERT INTO description_versions (element_id, description_template, state, is_active, version_number) VALUES (?, ?, 'S0', 0, 1)", 
+                      (elem_id, text_plantilla, ))
             
         conn.commit()
         return True, elem_id
@@ -88,9 +160,7 @@ def crear_element_complet(codi, nom, categoria, llista_variables, text_plantilla
 def crear_nova_variable(elem_id, nom, tipus, unitat, string_opciones=None):
     conn = get_connection()
     try:
-        # Si ve de la UI com a "LLISTA", a la BBDD és TEXT
         tipus_db = "TEXT" if tipus == "LLISTA (Desplegable)" else tipus
-        
         cur = conn.cursor()
         cur.execute("INSERT INTO element_variables (element_id, variable_name, variable_type, unit) VALUES (?, ?, ?, ?)",
                      (elem_id, nom, tipus_db, unitat))
@@ -105,7 +175,10 @@ def crear_nova_variable(elem_id, nom, tipus, unitat, string_opciones=None):
     finally:
         conn.close()
 
-def votar_versio(version_id, usuari):
+def votar_versio(version_id):
+    # FEM SERVIR L'USUARI REAL DE LA SESSIÓ
+    usuari = st.session_state.username 
+    
     conn = get_connection()
     c = conn.cursor()
     c.execute("SELECT approval_id FROM approvals WHERE version_id = ? AND approved_by = ?", (version_id, usuari))
@@ -141,7 +214,6 @@ def get_drafts_amb_vots(element_id):
     conn.close()
     return df
 
-# --- FUNCIONS PROJECTES ---
 def get_projects():
     conn = get_connection()
     df = pd.read_sql("SELECT project_id, project_code, project_name FROM projects", conn)
@@ -261,35 +333,23 @@ def save_instance_values(project_element_id, updates_dict):
         conn.close()
 
 # ==============================================================================
-# 2. INTERFÍCIE PRINCIPAL
+# 3. INTERFÍCIE PRINCIPAL
 # ==============================================================================
 
 st.sidebar.title("🏗️ Gestor CYPE")
 mode = st.sidebar.radio("Què vols fer?", ["📚 Gestió de Catàleg", "🏗️ Gestió de Projectes"], index=0)
 st.sidebar.markdown("---")
 
-# ==============================================================================
-# MODE A: CATÀLEG
-# ==============================================================================
 if mode == "📚 Gestió de Catàleg":
     
     sub_mode = st.sidebar.radio("Acció Catàleg:", ["🔍 Editar Existent", "➕ Crear Element"])
-    
-    st.sidebar.subheader("👤 Identificació")
-    usuari_actual = st.sidebar.selectbox("Qui ets?", ["Enginyer En cap", "Arquitecte A", "Revisor Tècnic", "Becari"])
     st.sidebar.markdown("---")
     
-    # ---------------------------------------------------------
-    # SUB-MODE: CREAR NOU ELEMENT (WIZARD V3 - SENSE FORMS RÍGIDS)
-    # ---------------------------------------------------------
     if sub_mode == "➕ Crear Element":
         st.title("➕ Crear Element")
-        
-        # INICIALITZAR ESTAT DE VARIABLES TEMPORALS
         if "wizard_vars" not in st.session_state:
             st.session_state.wizard_vars = []
 
-        # 1. DADES BÀSIQUES (Inputs directes, sense st.form)
         st.subheader("1. Dades Bàsiques")
         c1, c2, c3 = st.columns(3)
         c_codi = c1.text_input("Codi (ex: FAN-01)")
@@ -297,20 +357,14 @@ if mode == "📚 Gestió de Catàleg":
         c_cat = c3.selectbox("Categoria", ["ARQUITECTURA", "ESTRUCTURA", "INSTALACIONES", "ACABADOS"])
         
         st.divider()
-        
-        # 2. DEFINIR VARIABLES (Interactiu)
         st.subheader("2. Definir Variables")
         with st.container(border=True):
             st.caption("Defineix les variables aquí. Apareixeran a sota per copiar-les.")
-            
             vc1, vc2, vc3 = st.columns([2, 2, 1])
-            
-            # Use keys per netejar inputs si cal, o session state
             new_v_nom = vc1.text_input("Nom Variable (sense espais)", key="w_v_nom")
             new_v_tipus = vc2.selectbox("Tipus", ["TEXT", "NUMERIC", "LLISTA (Desplegable)"], key="w_v_tipus")
             new_v_unit = vc3.text_input("Unitat", key="w_v_unit")
             
-            # CONDICIONAL: Només mostrem opcions si és LLISTA
             new_v_opts = ""
             if new_v_tipus == "LLISTA (Desplegable)":
                 new_v_opts = st.text_input("Opcions (Separades per coma)", placeholder="Temperat, Laminat, Cru", key="w_v_opts")
@@ -327,11 +381,9 @@ if mode == "📚 Gestió de Catàleg":
                 else:
                     st.error("El nom és obligatori.")
 
-        # VISUALITZACIÓ VARIABLES ACUMULADES + COPIAR
         if st.session_state.wizard_vars:
             st.write("---")
             st.markdown("**Variables creades (Passa el ratolí pel codi per copiar):**")
-            
             cols_show = st.columns(4)
             for i, var in enumerate(st.session_state.wizard_vars):
                 with cols_show[i % 4]:
@@ -340,40 +392,30 @@ if mode == "📚 Gestió de Catàleg":
                     if var['opcions']:
                         desc += " (Amb opcions)"
                     st.caption(f"{desc}")
-            
             if st.button("Netejar Llista"):
                 st.session_state.wizard_vars = []
                 st.rerun()
 
         st.divider()
-        
-        # 3. PRIMERA DESCRIPCIÓ
         st.subheader("3. Primera Descripció (Draft S0)")
         c_desc = st.text_area("Plantilla de Text", height=150, placeholder="Enganxa aquí les variables de dalt...", key="w_desc")
         
         st.markdown("---")
-        
-        # BOTÓ FINAL DE GUARDAR (Processa tot)
         if st.button("💾 GUARDAR ELEMENT", type="primary"):
             if c_codi and c_nom:
                 ok, res = crear_element_complet(c_codi, c_nom, c_cat, st.session_state.wizard_vars, c_desc)
                 if ok:
                     st.balloons()
                     st.success(f"Element {c_nom} creat correctament!")
-                    # Netegem sessió
                     st.session_state.wizard_vars = []
                 else:
                     st.error(f"Error: {res}")
             else:
-                st.error("Falten dades bàsiques (Codi o Nom).")
+                st.error("Falten dades bàsiques.")
 
-    # ---------------------------------------------------------
-    # SUB-MODE: EDITAR EXISTENT
-    # ---------------------------------------------------------
     else:
         st.sidebar.subheader("📍 Navegador Catàleg")
         df_elements = get_elements()
-
         if df_elements.empty:
             st.error("BBDD buida.")
             st.stop()
@@ -401,19 +443,16 @@ if mode == "📚 Gestió de Catàleg":
 
         with tab1:
             col_vars, col_edit = st.columns([1, 2])
-            
             with col_vars:
                 st.subheader("Variables")
                 conn = get_connection()
                 vars_df = pd.read_sql("SELECT variable_id, variable_name, unit, variable_type FROM element_variables WHERE element_id = ?", conn, params=(elem_id,))
                 conn.close()
-                
                 if not vars_df.empty:
                     st.caption("Clica el codi per copiar:")
                     for idx, row in vars_df.iterrows():
                         var_code = f"{{{row['variable_name']}}}"
                         st.code(var_code, language="text")
-                        
                         opts_str = get_variable_options_string(row['variable_id'])
                         if opts_str:
                             st.caption(f"⬆️ {row['variable_type']} (Ops: {opts_str[:20]}...)")
@@ -423,17 +462,13 @@ if mode == "📚 Gestió de Catàleg":
                     st.info("Aquest element no té variables.")
 
                 st.divider()
-                
-                # AFEGIR VARIABLE EXTRA (Sense FORM per permetre condicional)
                 with st.expander("➕ Afegir Variable Extra"):
                     e_v_nom = st.text_input("Nom", placeholder="color_perfil", key="e_v_nom")
                     e_v_tipus = st.selectbox("Tipus", ["TEXT", "NUMERIC", "LLISTA (Desplegable)"], key="e_v_tipus")
                     e_v_unit = st.text_input("Unitat", placeholder="mm...", key="e_v_unit")
-                    
                     e_v_opts = ""
                     if e_v_tipus == "LLISTA (Desplegable)":
                         e_v_opts = st.text_input("Opcions (Separades per coma)", placeholder="A, B, C", key="e_v_opts")
-                    
                     if st.button("Crear Variable"):
                         if e_v_nom:
                             if crear_nova_variable(elem_id, e_v_nom, e_v_tipus, e_v_unit, e_v_opts):
@@ -445,7 +480,6 @@ if mode == "📚 Gestió de Catàleg":
             with col_edit:
                 st.subheader("Redactar Esborrany")
                 nou_text = st.text_area("Plantilla", height=200, placeholder="Enganxa aquí les variables...")
-                
                 if st.button("💾 Guardar Esborrany"):
                     if nou_text:
                         conn = get_connection()
@@ -471,7 +505,7 @@ if mode == "📚 Gestió de Catàleg":
                     cols[1].markdown(f"**Text:** {row['description_template']}")
                     cols[2].progress(row['vots'] / 3, text=f"{row['vots']}/3")
                     if cols[2].button(f"👍 Aprovar", key=f"btn_{row['version_id']}"):
-                        ok, msg = votar_versio(row['version_id'], usuari_actual)
+                        ok, msg = votar_versio(row['version_id'])
                         if ok:
                             st.balloons()
                             st.success(msg)
@@ -479,13 +513,9 @@ if mode == "📚 Gestió de Catàleg":
                         else:
                             st.warning(msg)
 
-# ==============================================================================
-# MODE B: PROJECTES
-# ==============================================================================
 elif mode == "🏗️ Gestió de Projectes":
     
     st.sidebar.subheader("📂 Projectes")
-    
     with st.sidebar.expander("➕ Crear Nou Projecte"):
         with st.form("new_proy_form"):
             c_proy = st.text_input("Codi", placeholder="PROY-202X")
@@ -497,7 +527,6 @@ elif mode == "🏗️ Gestió de Projectes":
                     st.rerun()
 
     df_proy = get_projects()
-    
     if df_proy.empty:
         st.info("Crea un projecte primer.")
     else:
@@ -506,17 +535,14 @@ elif mode == "🏗️ Gestió de Projectes":
         proy_id = int(df_proy[df_proy['project_code'] == sel_proy.split(" - ")[0]].iloc[0]['project_id'])
         
         st.sidebar.subheader("🧱 Afegir Elements")
-        
         with st.sidebar.expander("➕ Afegir / Multiplicar", expanded=True):
             df_cat = get_elements()
             cats = df_cat.apply(lambda x: f"{x['element_code']} - {x['element_name']}", axis=1).tolist()
             elem_to_add = st.selectbox("Element base", cats)
-            
             col_a, col_b = st.columns(2)
             inst_code = col_a.text_input("Codi Base", placeholder="PIL-CEN")
             inst_name = col_b.text_input("Nom Base", placeholder="Pilar Central")
             quantitat = st.number_input("Quantitat", min_value=1, value=1, step=1)
-            
             if st.button("Afegir Element(s)"):
                 if inst_code and inst_name:
                     e_id = int(df_cat[df_cat['element_code'] == elem_to_add.split(" - ")[0]].iloc[0]['element_id'])
@@ -531,7 +557,6 @@ elif mode == "🏗️ Gestió de Projectes":
 
         st.title("📋 Llistat d'Elements del Projecte")
         df_inst = get_project_instances(proy_id)
-        
         if df_inst.empty:
             st.warning("Projecte buit.")
         else:
@@ -542,7 +567,6 @@ elif mode == "🏗️ Gestió de Projectes":
                         if st.button("🗑️ Esborrar", key=f"del_{row['project_element_id']}", type="primary"):
                             esborrar_instancia_projecte(row['project_element_id'])
                             st.rerun()
-                    
                     with col_edit:
                         st.write("**Editar Valors Tècnics:**")
                         df_vals = get_instance_variables_values(row['project_element_id'])
@@ -555,9 +579,7 @@ elif mode == "🏗️ Gestió de Projectes":
                                 for i, r_var in df_vals.iterrows():
                                     val_act = r_var['value'] if pd.notna(r_var['value']) else ""
                                     lbl = f"{r_var['variable_name']} ({r_var['unit']})"
-                                    
                                     opciones = get_variable_options(r_var['variable_id'])
-                                    
                                     with c_form[i % 3]:
                                         if opciones:
                                             idx_sel = 0
@@ -569,9 +591,7 @@ elif mode == "🏗️ Gestió de Projectes":
                                             new_v = st.selectbox(lbl, opciones, index=idx_sel, key=f"sel_{row['project_element_id']}_{r_var['variable_id']}")
                                         else:
                                             new_v = st.text_input(lbl, value=val_act, key=f"in_{row['project_element_id']}_{r_var['variable_id']}")
-                                        
                                         updates[r_var['variable_id']] = new_v
-                                
                                 if st.form_submit_button("💾 Guardar Canvis"):
                                     save_instance_values(row['project_element_id'], updates)
                                     st.toast("Guardat!", icon="✅")

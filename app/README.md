@@ -1,66 +1,66 @@
-# Office Data Management Web Application
+# Gestor de Partides - Streamlit Application
 
-Flask-based web interface for managing CYPE office elements, projects, and variable descriptions.
+Streamlit-based web interface for managing CYPE construction elements, projects, and variable descriptions with user authentication.
 
 ## Features
 
-- 📊 **Element Browser**: Browse 75+ CYPE construction elements
-- 🏗️ **Project Management**: Create and manage construction projects
-- 🔧 **Variable Editor**: Set element variables and generate descriptions
-- 📝 **Template Rendering**: Real-time description generation from templates
+- **User Authentication**: Login with "Remember Me" cookie support (7 days)
+- **Role-based Access**: viewer, editor, admin roles stored in database
+- **Element Catalog Management**: Browse, create, and edit construction elements
+- **Variable Management**: Define variables with types (TEXT, NUMERIC, LIST with options)
+- **Version Control**: Draft versions with 3-vote approval workflow
+- **Project Management**: Create projects and add element instances
+- **Bulk Creation**: Add multiple element instances at once
 
 ## Quick Start
 
 ```bash
-# From repository root
 cd app/
-python app.py
+pip install -r requirements.txt
+streamlit run app_gestio.py
 ```
 
-Access at: http://localhost:5001
+Access at: http://localhost:8501
 
 ## Architecture
 
 ```
 app/
-├── app.py              # Main Flask application
-├── templates/          # HTML templates
-│   ├── index.html      # Element browser
-│   ├── projects.html   # Project listing
-│   ├── element_detail.html
-│   ├── project_detail.html
-│   ├── edit_values.html
-│   └── ...
-└── README.md          # This file
+├── app_gestio.py       # Main Streamlit application
+├── requirements.txt    # Python dependencies
+└── README.md           # This file
 ```
 
 ## Database
 
-Uses: `../office_variable_demo/office_data.db`
-- **75 elements** from CYPE construction data
-- **7,274+ variables** with options and constraints
-- **Project system** for element instances
+Uses: `../src/office_data.db`
+- **Elements** with variables and description templates
+- **Projects** with element instances
+- **Users** with hashed passwords and roles
+- **Approvals** for version voting system
 
 ## Dependencies
 
-- Flask (web framework)
-- office_variable_demo.api.OfficeDBManager (database interface)
+- streamlit
+- streamlit-authenticator
+- pandas
+- sqlite3 (built-in)
+- bcrypt
 
-## URL Routes
+## Main Sections
 
-- `/` - Element browser homepage
-- `/element/<code>` - Element details and variables
-- `/projects` - Project listing
-- `/project/<id>` - Project details and elements
-- `/create_project` - New project form
-- `/edit_values/<id>` - Variable value editor
-- `/api/render/<id>` - Description rendering API
+### Catalog Management
+- **Edit Existing**: Browse elements, manage variables, create drafts
+- **Create Element**: Wizard to define new elements with variables
 
-## Development
+### Project Management
+- **Create Projects**: Define new construction projects
+- **Add Elements**: Assign element instances to projects
+- **Edit Values**: Set variable values for each instance
 
-The app runs on port 5001 to avoid conflicts with other services on the default Flask port 5000.
+## Authentication
 
-Database integration is handled through the OfficeDBManager which provides:
-- Element and variable management
-- Project and instance tracking
-- Template rendering with variable substitution
+Users are stored in the `users` table with bcrypt-hashed passwords. The `streamlit-authenticator` library handles:
+- Login form
+- Cookie-based session persistence
+- Logout functionality
