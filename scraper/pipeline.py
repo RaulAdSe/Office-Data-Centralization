@@ -215,6 +215,11 @@ class CYPEPipeline:
                         logger.warning(f"No variables extracted from {url}")
                         return None
 
+                    # Get element code from page content (preferred) or fallback to URL
+                    element_code = extractor.get_element_code()
+                    if not element_code:
+                        element_code = self._extract_code_from_url(url)
+
                     # Generate template with placeholders from combination results
                     description_template = ""
                     # Filter to only results that have descriptions
@@ -229,7 +234,7 @@ class CYPEPipeline:
 
                     # Convert to ElementData
                     return ElementData(
-                        code=self._extract_code_from_url(url),
+                        code=element_code,
                         title=url.split('/')[-1].replace('.html', ''),
                         variables=variables,
                         url=url,

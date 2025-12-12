@@ -184,6 +184,9 @@ class CYPEExtractor:
             # Dismiss cookie consent popup
             await self.browser_extractor._dismiss_cookie_consent(page)
 
+            # Extract element code from page content
+            self._last_element_code = await self.browser_extractor.extract_element_code(page)
+
             # Extract variables
             variables = await self.browser_extractor._extract_form_variables(page)
 
@@ -215,6 +218,10 @@ class CYPEExtractor:
 
         finally:
             await page.close()
+
+    def get_element_code(self) -> str:
+        """Get the element code extracted from the last page."""
+        return getattr(self, '_last_element_code', '')
 
 
 # Backwards compatibility aliases

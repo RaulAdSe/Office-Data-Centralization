@@ -311,6 +311,23 @@ class BrowserExtractor:
 
         return variables
 
+    async def extract_element_code(self, page) -> str:
+        """Extract element code from page content (e.g., EHV010 from 'UNIDAD DE OBRA EHV010:')."""
+        code = await page.evaluate('''() => {
+            const text = document.body.innerText;
+
+            // Pattern 1: "UNIDAD DE OBRA EHV010:" format
+            let match = text.match(/UNIDAD DE OBRA\\s+([A-Z]{2,4}\\d{3})\\s*:/i);
+            if (match) return match[1].toUpperCase();
+
+            // Pattern 2: Element code in breadcrumb or title
+            match = text.match(/\\b([A-Z]{2,4}\\d{3})\\b/);
+            if (match) return match[1].toUpperCase();
+
+            return null;
+        }''')
+        return code or ""
+
     async def extract_description(self, page) -> str:
         """Extract description from page."""
         # First, try to expand the "Pliego de condiciones" accordion
