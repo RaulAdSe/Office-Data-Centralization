@@ -536,62 +536,96 @@ class BrowserExtractor:
         return start, end
 
     def _find_change_position(self, base_text: str, target_text: str,
-                               old_value: str, new_value: str) -> Optional[int]:
+                               old_value: str, new_value: str) -> Optional[Tuple[int, int]]:
         """
-        Find the position where old_value was replaced by new_value.
+        Find the position and length of text that changed when a variable was modified.
 
-        This handles the case where old_value appears multiple times in the text
-        by checking which occurrence was actually changed to new_value.
+        Strategy:
+        1. First try to find exact match of old_value in base_text
+        2. If not found, use diff to locate the change area, then find the full value nearby
+        3. Handles partial matches (e.g., "cubilote" from "Con cubilote", "X0" -> "XC4")
 
-        Returns the position of old_value in base_text, or None if not found.
-        Returns None if the variable change doesn't actually affect the description text.
+        Returns (start, length) of the text to replace in base_text.
         """
         if not old_value or not new_value:
             return None
 
         # First, check if the texts are actually different
         if base_text == target_text:
-            # Variable change doesn't affect description - skip
             return None
 
-        # Find all occurrences of old_value in base_text
-        positions = []
-        pos = 0
-        while True:
-            pos = base_text.find(old_value, pos)
-            if pos == -1:
-                break
-            positions.append(pos)
-            pos += 1
+        # Strategy 1: Try to find exact old_value in base_text
+        pos = base_text.find(old_value)
+        if pos != -1:
+            # Verify this is the right occurrence by checking if new_value is at same position in target
+            # Account for length difference
+            target_pos = target_text.find(new_value)
+            if target_pos != -1 and abs(pos - target_pos) < 10:
+                return (pos, len(old_value))
 
-        if not positions:
-            return None
+        # Strategy 2: Find last word of old_value (e.g., "cubilote" from "Con cubilote")
+        old_words = old_value.split()
+        if old_words:
+            last_word = old_words[-1]
+            pos = base_text.find(last_word)
+            if pos != -1:
+                new_words = new_value.split()
+                if new_words:
+                    new_last_word = new_words[-1]
+                    target_pos = target_text.find(new_last_word)
+                    if target_pos != -1 and abs(pos - target_pos) < 10:
+                        return (pos, len(last_word))
 
-        # For each position, check if new_value appears at the same position in target
-        for pos in positions:
-            # Check if new_value appears at approximately the same position in target
-            search_start = max(0, pos - 5)
-            search_end = min(len(target_text), pos + len(new_value) + 5)
-            search_region = target_text[search_start:search_end]
+        # Strategy 3: Use diff to find the change area
+        import difflib
+        matcher = difflib.SequenceMatcher(None, base_text, target_text)
 
-            if new_value in search_region:
-                # Verify context matches (character before and after)
-                before_base = base_text[pos - 1] if pos > 0 else ''
-                after_base = base_text[pos + len(old_value)] if pos + len(old_value) < len(base_text) else ''
+        for tag, i1, i2, j1, j2 in matcher.get_opcodes():
+            if tag == 'replace':
+                old_text = base_text[i1:i2]
+                new_text = target_text[j1:j2]
 
-                # Find new_value position in target within the search region
-                target_pos = target_text.find(new_value, search_start)
-                if target_pos != -1 and target_pos < search_end:
-                    before_target = target_text[target_pos - 1] if target_pos > 0 else ''
-                    after_target = target_text[target_pos + len(new_value)] if target_pos + len(new_value) < len(target_text) else ''
+                # The diff might be partial (e.g., '0' -> 'C4' when X0 -> XC4)
+                # Look backwards and forwards to capture the full value
 
-                    # Context matches - this is the correct position
-                    if before_base == before_target and after_base == after_target:
-                        return pos
+                # Expand backwards to find the start of the value
+                start = i1
+                while start > 0 and base_text[start-1].isalnum():
+                    start -= 1
 
-        # No matching position found with context verification
-        # This means the variable change doesn't directly affect the text
-        # (e.g., the variable value doesn't appear literally in the description)
+                # Expand forwards to find the end of the value
+                end = i2
+                while end < len(base_text) and base_text[end].isalnum():
+                    end += 1
+
+                expanded_old = base_text[start:end]
+
+                # Verify the expanded text contains or relates to old_value
+                if (old_value.lower() in expanded_old.lower() or
+                    expanded_old.lower() in old_value.lower() or
+                    any(w.lower() in expanded_old.lower() for w in old_value.split())):
+                    return (start, end - start)
+
+                # Also check if the diff position relates to the variable
+                old_lower = old_value.lower()
+                new_lower = new_value.lower()
+                old_text_lower = old_text.lower()
+                new_text_lower = new_text.lower()
+
+                if (old_lower in old_text_lower or old_text_lower in old_lower or
+                    new_lower in new_text_lower or new_text_lower in new_lower):
+                    return (i1, i2 - i1)
+
+            elif tag == 'insert':
+                # Text was added - check if the new_value appears in the inserted text
+                inserted_text = target_text[j1:j2]
+                if new_value.lower() in inserted_text.lower():
+                    # The variable adds text when changed from default
+                    # Return the position where insertion happens (we'll mark this for potential placeholder)
+                    # Note: This is an edge case - variable defaults to something not shown
+                    # We return position i1 with length 0 to indicate insertion point
+                    return (i1, 0)
+
         return None
 
     def create_dynamic_template(self, results: List[CombinationResult]) -> str:
@@ -641,11 +675,12 @@ class BrowserExtractor:
                 new_value = var_changes[0]['new_value']
 
                 # Find where the change actually occurred by comparing texts
-                # This is more reliable than searching for the old value (which may appear multiple times)
-                change_pos = self._find_change_position(base_text, target_text, old_value, new_value)
+                # Returns (start_position, length) of the changed text
+                change_result = self._find_change_position(base_text, target_text, old_value, new_value)
 
-                if change_pos is not None:
-                    start, end = change_pos, change_pos + len(old_value)
+                if change_result is not None:
+                    start, length = change_result
+                    end = start + length
 
                     if start < end:  # Valid region
                         if var_name not in variable_regions:

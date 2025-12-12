@@ -220,17 +220,24 @@ class CYPEPipeline:
                     if not element_code:
                         element_code = self._extract_code_from_url(url)
 
-                    # Generate template with placeholders from combination results
-                    description_template = ""
-                    # Filter to only results that have descriptions
+                    # Get raw description from first successful result
+                    raw_description = ""
                     results_with_desc = [r for r in results if r.description]
-                    if len(results_with_desc) >= 2:
-                        # Use create_dynamic_template to generate template with {Placeholder} variables
-                        description_template = extractor.browser_extractor.create_dynamic_template(results_with_desc)
+                    if results_with_desc:
+                        raw_description = results_with_desc[0].description
 
-                    if not description_template and results_with_desc:
-                        # Fallback to first description if template generation fails
-                        description_template = results_with_desc[0].description
+                    # Create template using simple search-replace approach
+                    description_template = raw_description
+                    if raw_description and variables:
+                        from scraper.template_extraction.simple_template import create_template
+                        # Build variable values dict (use first option as value)
+                        var_values = {}
+                        for var in variables:
+                            if var.options:
+                                var_values[var.name] = var.options[0]
+
+                        result = create_template(raw_description, var_values)
+                        description_template = result.template
 
                     # Convert to ElementData
                     return ElementData(
