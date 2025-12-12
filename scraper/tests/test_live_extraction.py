@@ -150,14 +150,21 @@ class TestVariableExtraction:
         async with CYPEExtractor(headless=True, timeout=60000) as extractor:
             extracted_vars, _ = await extractor.extract(url)
 
-        web_var_names = {v['name'] for v in web_vars}
+        def normalize_name(name):
+            """Strip unit suffix from variable name for comparison."""
+            # Pattern: "Name (unit)" -> "Name"
+            match = re.match(r'^(.+?)\s*\([^)]{1,20}\)\s*$', name)
+            return match.group(1).strip() if match else name
+
+        # Normalize web variable names (strip units for comparison)
+        web_var_names = {normalize_name(v['name']) for v in web_vars}
         extracted_var_names = {v.name for v in extracted_vars}
 
         # Check coverage - extracted should have most web variables
         missing = web_var_names - extracted_var_names
         coverage = (len(web_var_names) - len(missing)) / len(web_var_names) * 100
 
-        # Allow for some variance due to duplicate handling
+        # Allow for some variance due to duplicate handling and text extraction
         assert coverage >= 80, f"Should capture at least 80% of web variables. Missing: {missing}"
 
     @pytest.mark.asyncio
@@ -174,9 +181,14 @@ class TestVariableExtraction:
         unit_vars = [v for v in variables if v.unit]
 
         # The page should have some variables with units like N/mm², mm, etc.
-        # This is informational - not a hard requirement
-        if not unit_vars:
-            pytest.xfail("No units extracted - this is expected if page has no unit suffixes")
+        assert len(unit_vars) > 0, "Should extract at least some variables with units"
+
+        # Check specific expected units
+        expected_units = {'N/mm²', 'mm'}
+        found_units = {v.unit for v in unit_vars}
+
+        # At least one expected unit should be found
+        assert found_units & expected_units, f"Expected units {expected_units}, found {found_units}"
 
 
 class TestDescriptionExtraction:
