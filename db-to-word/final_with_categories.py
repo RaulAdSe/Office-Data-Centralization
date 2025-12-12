@@ -7,15 +7,31 @@ Exports project elements with fully rendered descriptions and variables.
 import sqlite3
 import pandas as pd
 import os
+from pathlib import Path
 
-DB_PATH = "/Users/rauladell/Work/Office-Data-Centralization/src/office_data.db"
-PROJECT_CODE = "MADRID-OFFICE-2024"
+# Default paths - can be overridden via parameters
+DEFAULT_DB_PATH = Path(__file__).parent.parent / "src" / "office_data.db"
+DEFAULT_PROJECT_CODE = "MADRID-OFFICE-2024"
 
-def generate_final_excel():
-    """Generate Excel with real database data for Mail Merge"""
-    print(f"🎯 Exporting project: {PROJECT_CODE}")
-    
-    conn = sqlite3.connect(DB_PATH)
+def generate_final_excel(db_path: str = None, project_code: str = None, output_dir: str = None):
+    """
+    Generate Excel with real database data for Mail Merge.
+
+    Args:
+        db_path: Path to SQLite database. Defaults to src/office_data.db
+        project_code: Project code to export. Defaults to MADRID-OFFICE-2024
+        output_dir: Output directory for Excel file. Defaults to excel_exports/
+
+    Returns:
+        Path to generated Excel file, or None if no data found
+    """
+    db_path = db_path or str(DEFAULT_DB_PATH)
+    project_code = project_code or DEFAULT_PROJECT_CODE
+    output_dir = output_dir or os.path.join(os.path.dirname(__file__), "excel_exports")
+
+    print(f"🎯 Exporting project: {project_code}")
+
+    conn = sqlite3.connect(db_path)
     
     # Main query to get all project data
     query = """
@@ -42,11 +58,11 @@ def generate_final_excel():
     ORDER BY e.category, pe.instance_code, ev.display_order
     """
     
-    df = pd.read_sql_query(query, conn, params=(PROJECT_CODE,))
+    df = pd.read_sql_query(query, conn, params=(project_code,))
     conn.close()
-    
+
     if df.empty:
-        print(f"❌ No data found for project {PROJECT_CODE}")
+        print(f"❌ No data found for project {project_code}")
         return None
         
     print(f"📊 Found {len(df)} data rows")
@@ -104,13 +120,12 @@ def generate_final_excel():
     print(f"📂 Categories: {', '.join(categories)}")
     
     # Create output directory and clean it
-    output_dir = "excel_exports"
     os.makedirs(output_dir, exist_ok=True)
     for file in os.listdir(output_dir):
         if file.endswith('.xlsx'):
             os.remove(os.path.join(output_dir, file))
-    
-    output_file = f"{output_dir}/{PROJECT_CODE}_FINAL_WITH_CATEGORIES.xlsx"
+
+    output_file = f"{output_dir}/{project_code}_FINAL_WITH_CATEGORIES.xlsx"
     
     # Create Excel
     with pd.ExcelWriter(output_file, engine='openpyxl') as writer:
