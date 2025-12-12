@@ -158,45 +158,7 @@ CREATE TABLE project_element_values (
 CREATE INDEX idx_project_element_values_element ON project_element_values(project_element_id);
 
 -- ============================================================
-
-CREATE TABLE rendered_descriptions (
-    render_id           INTEGER PRIMARY KEY AUTOINCREMENT,
-    project_element_id  INTEGER NOT NULL UNIQUE REFERENCES project_elements(project_element_id) ON DELETE CASCADE,
-    rendered_text       TEXT NOT NULL,
-    is_stale            BOOLEAN DEFAULT 0,
-    rendered_at         DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-
--- ============================================================
--- PART 5: TRIGGERS
--- ============================================================
-
-CREATE TRIGGER trg_mark_stale_on_value_change
-AFTER INSERT ON project_element_values
-BEGIN
-    UPDATE rendered_descriptions
-    SET is_stale = 1
-    WHERE project_element_id = NEW.project_element_id;
-END;
-
-CREATE TRIGGER trg_mark_stale_on_value_update
-AFTER UPDATE ON project_element_values
-BEGIN
-    UPDATE rendered_descriptions
-    SET is_stale = 1
-    WHERE project_element_id = NEW.project_element_id;
-END;
-
-CREATE TRIGGER trg_mark_stale_on_value_delete
-AFTER DELETE ON project_element_values
-BEGIN
-    UPDATE rendered_descriptions
-    SET is_stale = 1
-    WHERE project_element_id = OLD.project_element_id;
-END;
-
--- ============================================================
--- PART 6: VIEWS
+-- PART 5: VIEWS
 -- ============================================================
 
 CREATE VIEW v_active_descriptions AS
@@ -230,6 +192,8 @@ WHERE dv.state IN ('S0', 'S1', 'S2')
 ORDER BY dv.element_id, dv.state DESC, dv.created_at;
 
 -- ============================================================
+-- View for project elements with their templates (rendering happens in application layer)
+-- ============================================================
 
 CREATE VIEW v_project_elements_rendered AS
 SELECT 
@@ -240,15 +204,11 @@ SELECT
     pe.instance_name,
     pe.location,
     dv.description_template,
-    dv.version_number AS locked_version,
-    rd.rendered_text,
-    rd.is_stale,
-    rd.rendered_at
+    dv.version_number AS locked_version
 FROM project_elements pe
 JOIN projects p ON pe.project_id = p.project_id
 JOIN elements e ON pe.element_id = e.element_id
-JOIN description_versions dv ON pe.description_version_id = dv.version_id
-LEFT JOIN rendered_descriptions rd ON pe.project_element_id = rd.project_element_id;
+JOIN description_versions dv ON pe.description_version_id = dv.version_id;
 
 -- ============================================================
 -- NEW: VIEW TO SEE VARIABLES WITH THEIR OPTIONS (FOR UI FORMS)

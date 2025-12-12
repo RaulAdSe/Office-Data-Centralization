@@ -226,13 +226,7 @@ class OfficeDBManager:
             
             rendered = re.sub(r'\{([^}]+)\}', replace_placeholder, template)
             
-            # Store rendered description
-            cursor.execute("""
-                INSERT OR REPLACE INTO rendered_descriptions 
-                (project_element_id, rendered_text, is_stale)
-                VALUES (?, ?, 0)
-            """, (project_element_id, rendered))
-            
+            # Return rendered text directly (no DB caching)
             return rendered
     
     def get_project_elements(self, project_id: int) -> List[ProjectElement]:

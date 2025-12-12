@@ -1,195 +1,267 @@
 #!/usr/bin/env python3
 """
-Generate all possible variable combinations for template extraction
+Combination generator for CYPE template extraction.
+
+This module provides strategic combination generation for template pattern detection,
+using only 3-5 combinations instead of exhaustive testing.
+
+Usage:
+    # With pre-extracted variables
+    generator = CombinationGenerator(max_combinations=5)
+    combinations = generator.generate(variables)
+
+    # With Playwright browser automation
+    async with CYPEExtractor() as extractor:
+        variables, results = await extractor.extract(url)
 """
 
-import itertools
-from typing import Dict, List, Tuple, Any
-from dataclasses import dataclass
+from typing import Dict, List, Any, Tuple
 
-@dataclass
-class VariableCombination:
-    """Represents a specific combination of variable values"""
-    values: Dict[str, str]
-    combination_id: str
-    
-    def __post_init__(self):
-        if not self.combination_id:
-            # Generate ID from sorted variable values
-            sorted_items = sorted(self.values.items())
-            self.combination_id = "_".join([f"{k}:{v}" for k, v in sorted_items])
+from scraper.models import (
+    ElementVariable,
+    VariableCombination,
+    CombinationResult,
+    VariableType,
+)
+from .text_extractor import TextVariableExtractor
+from .browser_extractor import BrowserExtractor
+
+
+# Dimension value mappings for TEXT variables
+DIMENSION_VALUES = {
+    ('espesor', 'grosor'): ['20', '30', '40', '50'],
+    ('diametro', 'diámetro'): ['12', '16', '20', '25'],
+    ('longitud', 'largo'): ['100', '200', '300'],
+    ('ancho', 'anchura'): ['50', '100', '150'],
+    ('alto', 'altura'): ['200', '250', '300'],
+    ('resistencia',): ['25', '30', '35', '40'],
+    ('temperatura',): ['20', '25', '30'],
+    ('pendiente',): ['1', '2', '3', '5'],
+}
+
 
 class CombinationGenerator:
-    """Generates all possible variable combinations for an element"""
-    
+    """
+    Generates strategic variable combinations for template pattern detection.
+
+    Strategy:
+    1. Default combination (all first options) - baseline
+    2. Single-variable changes - isolate each variable's effect
+    3. Pair changes - detect variable interactions
+
+    This reduces millions of combinations to just 3-5 tests.
+    """
+
     def __init__(self, max_combinations: int = 5):
-        """
-        Args:
-            max_combinations: Maximum combinations to generate (5 is sufficient for pattern detection)
-        """
         self.max_combinations = max_combinations
-    
-    def generate_combinations(self, variables: List[Any]) -> List[VariableCombination]:
-        """
-        Generate all possible combinations of variable values
-        
-        Args:
-            variables: List of variable objects with name, type, options, default_value
-            
-        Returns:
-            List of VariableCombination objects
-        """
-        # First, prepare variable options
-        var_options = {}
-        
-        for var in variables:
-            if var.variable_type == 'RADIO' and var.options:
-                # Use all available options
-                var_options[var.name] = var.options
-            elif var.variable_type == 'TEXT':
-                # For text variables, use default if available, otherwise common values
-                if var.default_value:
-                    var_options[var.name] = [var.default_value]
-                else:
-                    # Common construction values based on variable name
-                    var_options[var.name] = self._get_common_text_values(var.name)
-            elif var.variable_type == 'CHECKBOX':
-                # For checkboxes, true/false
-                var_options[var.name] = ['true', 'false']
-            else:
-                # Fallback to default
-                if var.default_value:
-                    var_options[var.name] = [var.default_value]
-                else:
-                    var_options[var.name] = ['default']
-        
+
+    def generate(self, variables: List[Any]) -> List[VariableCombination]:
+        """Generate strategic combinations from variables."""
+        var_options = self._prepare_options(variables)
         if not var_options:
             return []
-        
-        # Calculate total combinations
-        total_combinations = 1
-        for options in var_options.values():
-            total_combinations *= len(options)
-        
-        print(f"Total possible combinations: {total_combinations}")
-        
-        # If too many combinations, sample strategically
-        if total_combinations > self.max_combinations:
-            return self._generate_strategic_sample(var_options)
-        else:
-            return self._generate_all_combinations(var_options)
-    
-    def _generate_all_combinations(self, var_options: Dict[str, List[str]]) -> List[VariableCombination]:
-        """Generate all possible combinations"""
-        combinations = []
-        
-        # Get all variable names and their options
-        var_names = list(var_options.keys())
-        option_lists = [var_options[var] for var in var_names]
-        
-        # Generate cartesian product
-        for combo_values in itertools.product(*option_lists):
-            values = dict(zip(var_names, combo_values))
-            combinations.append(VariableCombination(values=values, combination_id=""))
-        
-        print(f"Generated {len(combinations)} combinations")
+
+        total = 1
+        for opts in var_options.values():
+            total *= len(opts)
+
+        print(f"Variables: {len(var_options)}, Total combinations: {total}")
+
+        combinations = self._generate_strategic(var_options)
+        print(f"Generated {len(combinations)} strategic combinations")
+
         return combinations
-    
-    def _generate_strategic_sample(self, var_options: Dict[str, List[str]]) -> List[VariableCombination]:
-        """Generate strategic sample when combinations are too many"""
+
+    def _prepare_options(self, variables: List[Any]) -> Dict[str, List[str]]:
+        """Prepare variable options from various input formats."""
+        var_options = {}
+
+        for var in variables:
+            name = getattr(var, 'name', None) or var.get('name', '')
+            var_type = getattr(var, 'variable_type', None) or var.get('variable_type', '')
+            options = getattr(var, 'options', None) or var.get('options', [])
+            default = getattr(var, 'default_value', None) or var.get('default_value')
+
+            # Normalize type
+            if hasattr(var_type, 'value'):
+                var_type = var_type.value
+            var_type = str(var_type).upper()
+
+            if var_type in ('RADIO', 'SELECT', 'CATEGORICAL') and options:
+                var_options[name] = list(options)
+            elif var_type == 'TEXT':
+                var_options[name] = [default] if default else self._get_text_values(name)
+            elif var_type == 'CHECKBOX':
+                var_options[name] = ['true', 'false']
+            elif options:
+                var_options[name] = list(options)
+            elif default:
+                var_options[name] = [default]
+
+        return var_options
+
+    def _generate_strategic(self, var_options: Dict[str, List[str]]) -> List[VariableCombination]:
+        """Generate minimal strategic combinations."""
         combinations = []
-        
-        # Strategy 1: All defaults
-        default_combo = {}
-        for var_name, options in var_options.items():
-            default_combo[var_name] = options[0]  # First option as default
-        combinations.append(VariableCombination(values=default_combo, combination_id=""))
-        
-        # Strategy 2: One variable at a time (keeping others default)
-        for var_name, options in var_options.items():
-            for option in options[1:]:  # Skip first (default)
-                combo = default_combo.copy()
-                combo[var_name] = option
-                combinations.append(VariableCombination(values=combo, combination_id=""))
-        
-        # Strategy 3: Pairs of variables
         var_names = list(var_options.keys())
-        for i in range(len(var_names)):
-            for j in range(i+1, len(var_names)):
-                var1, var2 = var_names[i], var_names[j]
-                for opt1 in var_options[var1][1:]:
-                    for opt2 in var_options[var2][1:]:
-                        combo = default_combo.copy()
-                        combo[var1] = opt1
-                        combo[var2] = opt2
-                        combinations.append(VariableCombination(values=combo, combination_id=""))
-                        
-                        if len(combinations) >= self.max_combinations:
-                            break
+
+        # Strategy 1: Default (all first options)
+        default = {name: opts[0] for name, opts in var_options.items()}
+        combinations.append(VariableCombination(values=default.copy(), strategy="default"))
+
+        # Strategy 2: Single changes
+        for var_name, options in var_options.items():
+            if len(options) > 1 and len(combinations) < self.max_combinations:
+                combo = default.copy()
+                combo[var_name] = options[1]
+                combinations.append(VariableCombination(values=combo, strategy="single_change"))
+
+        # Strategy 3: Pair changes
+        if len(combinations) < self.max_combinations and len(var_names) >= 2:
+            for i in range(len(var_names)):
+                for j in range(i + 1, len(var_names)):
                     if len(combinations) >= self.max_combinations:
                         break
-                if len(combinations) >= self.max_combinations:
-                    break
-            if len(combinations) >= self.max_combinations:
-                break
-        
-        # Remove duplicates
-        seen_ids = set()
-        unique_combinations = []
-        for combo in combinations:
-            if combo.combination_id not in seen_ids:
-                seen_ids.add(combo.combination_id)
-                unique_combinations.append(combo)
-        
-        print(f"Generated {len(unique_combinations)} strategic combinations")
-        return unique_combinations
-    
-    def _get_common_text_values(self, var_name: str) -> List[str]:
-        """Get common values for text variables based on name"""
-        name_lower = var_name.lower()
-        
-        if 'espesor' in name_lower or 'grosor' in name_lower:
-            return ['20', '30', '40', '50']
-        elif 'diametro' in name_lower or 'diámetro' in name_lower:
-            return ['12', '16', '20', '25']
-        elif 'longitud' in name_lower or 'largo' in name_lower:
-            return ['100', '200', '300', '400']
-        elif 'ancho' in name_lower or 'anchura' in name_lower:
-            return ['50', '100', '150', '200']
-        elif 'alto' in name_lower or 'altura' in name_lower:
-            return ['200', '250', '300', '350']
-        elif 'resistencia' in name_lower:
-            return ['25', '30', '35', '40']
-        elif 'temperatura' in name_lower:
-            return ['20', '25', '30', '40']
-        else:
-            # Generic numeric values
-            return ['10', '20', '30', '50']
+                    var1, var2 = var_names[i], var_names[j]
+                    if len(var_options[var1]) > 1 and len(var_options[var2]) > 1:
+                        combo = default.copy()
+                        combo[var1] = var_options[var1][1]
+                        combo[var2] = var_options[var2][1]
+                        combinations.append(VariableCombination(values=combo, strategy="pair_change"))
 
-def test_combination_generator():
-    """Test the combination generator"""
-    from dataclasses import dataclass
-    
-    @dataclass
-    class MockVariable:
-        name: str
-        variable_type: str
-        options: List[str] = None
-        default_value: str = None
-    
-    # Test variables
-    variables = [
-        MockVariable("ubicacion", "RADIO", ["Interior", "Exterior"], "Interior"),
-        MockVariable("acabado", "RADIO", ["Brillante", "Satinado", "Mate"], "Brillante"),
-        MockVariable("espesor", "TEXT", default_value="20"),
-    ]
-    
-    generator = CombinationGenerator(max_combinations=20)
-    combinations = generator.generate_combinations(variables)
-    
-    print(f"\nGenerated {len(combinations)} combinations:")
-    for i, combo in enumerate(combinations):
-        print(f"{i+1:2d}: {combo.values}")
+        # Deduplicate
+        seen = set()
+        unique = []
+        for combo in combinations:
+            if combo.combination_id not in seen:
+                seen.add(combo.combination_id)
+                unique.append(combo)
+
+        return unique[:self.max_combinations]
+
+    def _get_text_values(self, var_name: str) -> List[str]:
+        """Get common test values for text variables."""
+        name_lower = var_name.lower()
+        for keywords, values in DIMENSION_VALUES.items():
+            if any(kw in name_lower for kw in keywords):
+                return values
+        return ['10', '20', '30']
+
+
+class CYPEExtractor:
+    """
+    High-level CYPE extraction interface combining browser and text extraction.
+
+    Usage:
+        async with CYPEExtractor() as extractor:
+            variables, results = await extractor.extract(url)
+    """
+
+    def __init__(self, headless: bool = True, timeout: int = 30000, max_combinations: int = 5):
+        self.browser_extractor = BrowserExtractor(headless=headless, timeout=timeout)
+        self.combination_generator = CombinationGenerator(max_combinations=max_combinations)
+
+    async def __aenter__(self):
+        await self.browser_extractor.__aenter__()
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        await self.browser_extractor.__aexit__(exc_type, exc_val, exc_tb)
+
+    async def extract(self, url: str) -> Tuple[List[ElementVariable], List[CombinationResult]]:
+        """
+        Extract variables and generate combination results from a CYPE URL.
+
+        Returns:
+            Tuple of (extracted variables, combination results with descriptions)
+        """
+        page = await self.browser_extractor.context.new_page()
+
+        try:
+            await page.goto(url, timeout=self.browser_extractor.timeout)
+            await page.wait_for_load_state('networkidle')
+
+            # Dismiss cookie consent popup
+            await self.browser_extractor._dismiss_cookie_consent(page)
+
+            # Extract element code from page content
+            self._last_element_code = await self.browser_extractor.extract_element_code(page)
+
+            # Extract variables
+            variables = await self.browser_extractor._extract_form_variables(page)
+
+            # Supplement with text extraction
+            text = await page.inner_text('body')
+            text_vars = self.browser_extractor.text_extractor.extract_from_text(text)
+            form_names = {v.name.lower() for v in variables}
+            for var in text_vars:
+                if var.name.lower() not in form_names:
+                    variables.append(var)
+
+            if variables:
+                print(f"Extracted {len(variables)} variables from form elements")
+
+            if not variables:
+                print("Warning: No variables extracted")
+                return [], []
+
+            # Generate combinations
+            combinations = self.combination_generator.generate(variables)
+
+            # Apply combinations and capture descriptions
+            results = []
+            for combo in combinations:
+                result = await self.browser_extractor.apply_combination(page, combo)
+                results.append(result)
+
+            return variables, results
+
+        finally:
+            await page.close()
+
+    def get_element_code(self) -> str:
+        """Get the element code extracted from the last page."""
+        return getattr(self, '_last_element_code', '')
+
+
+# Backwards compatibility aliases
+BrowserCombinationGenerator = CYPEExtractor
+
+
+def test():
+    """Quick test of the combination generator."""
+    import asyncio
+
+    async def run_test():
+        print("=" * 60)
+        print("Testing CombinationGenerator")
+        print("=" * 60)
+
+        # Test with mock variables
+        variables = [
+            {"name": "Sistema", "variable_type": "RADIO", "options": ["EPS", "Mineral", "Flexible"]},
+            {"name": "Espesor", "variable_type": "RADIO", "options": ["40", "60", "80"]},
+            {"name": "Color", "variable_type": "RADIO", "options": ["Blanco", "Gris"]},
+        ]
+
+        generator = CombinationGenerator(max_combinations=5)
+        combinations = generator.generate(variables)
+
+        for i, combo in enumerate(combinations, 1):
+            print(f"\n{i}. {combo.strategy}: {combo.values}")
+
+        print("\n" + "=" * 60)
+        print("Testing Browser Extractor")
+        print("=" * 60)
+
+        try:
+            async with CYPEExtractor(headless=True) as extractor:
+                print("Browser initialized successfully")
+        except ImportError as e:
+            print(f"Playwright not available: {e}")
+
+    asyncio.run(run_test())
+
 
 if __name__ == "__main__":
-    test_combination_generator()
+    test()

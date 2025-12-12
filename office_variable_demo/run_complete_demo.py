@@ -212,14 +212,10 @@ def demo_complete_system():
         
         cursor.execute("SELECT COUNT(*) FROM project_element_values")
         final_values = cursor.fetchone()[0]
-        
-        cursor.execute("SELECT COUNT(*) FROM rendered_descriptions")
-        final_rendered = cursor.fetchone()[0]
     
     print(f"Projects: {final_projects}")
     print(f"Project Elements: {final_pe}")
     print(f"Variable Values: {final_values}")
-    print(f"Rendered Descriptions: {final_rendered}")
     
     print()
     print("=" * 80)
