@@ -10,7 +10,7 @@ import os
 from pathlib import Path
 
 # Default paths - can be overridden via parameters
-DEFAULT_DB_PATH = Path(__file__).parent.parent / "src" / "office_data.db"
+DEFAULT_DB_PATH = Path(__file__).parent.parent / "data" / "office_data.db"
 DEFAULT_PROJECT_CODE = "MADRID-OFFICE-2024"
 
 def generate_final_excel(db_path: str = None, project_code: str = None, output_dir: str = None):
@@ -18,7 +18,7 @@ def generate_final_excel(db_path: str = None, project_code: str = None, output_d
     Generate Excel with real database data for Mail Merge.
 
     Args:
-        db_path: Path to SQLite database. Defaults to src/office_data.db
+        db_path: Path to SQLite database. Defaults to data/office_data.db
         project_code: Project code to export. Defaults to MADRID-OFFICE-2024
         output_dir: Output directory for Excel file. Defaults to excel_exports/
 

@@ -1233,10 +1233,10 @@ class DatabaseManager:
     def get_template_mappings(self, version_id: int) -> List[Dict[str, Any]]:
         """
         Get template variable mappings for a version.
-        
+
         Args:
             version_id: ID of the description version
-            
+
         Returns:
             List of mapping dictionaries
         """
@@ -1250,4 +1250,417 @@ class DatabaseManager:
                 (version_id,)
             )
             return [dict(row) for row in cursor.fetchall()]
+
+    # ============================================================
+    # APP-SPECIFIC METHODS (for Streamlit app integration)
+    # ============================================================
+
+    def list_projects(self) -> List[Dict[str, Any]]:
+        """List all projects."""
+        with self.get_connection() as conn:
+            cursor = conn.execute(
+                "SELECT project_id, project_code, project_name, status FROM projects ORDER BY project_code"
+            )
+            return [dict(row) for row in cursor.fetchall()]
+
+    def list_elements_with_active_version(self) -> List[Dict[str, Any]]:
+        """
+        List all elements with their active version info.
+
+        Returns:
+            List of elements with version_number and description_template from active version
+        """
+        with self.get_connection() as conn:
+            cursor = conn.execute("""
+                SELECT e.element_id, e.element_code, e.element_name, e.category,
+                       dv.version_number as version_activa, dv.description_template
+                FROM elements e
+                LEFT JOIN description_versions dv ON e.element_id = dv.element_id AND dv.is_active = 1
+                ORDER BY e.element_code
+            """)
+            return [dict(row) for row in cursor.fetchall()]
+
+    def get_drafts_with_votes(self, element_id: int) -> List[Dict[str, Any]]:
+        """
+        Get all draft versions for an element with vote counts.
+
+        Args:
+            element_id: ID of the element
+
+        Returns:
+            List of draft versions with vote counts
+        """
+        with self.get_connection() as conn:
+            cursor = conn.execute("""
+                SELECT dv.version_id, dv.version_number, dv.state, dv.description_template, dv.created_at,
+                       COUNT(ap.approval_id) as vots
+                FROM description_versions dv
+                LEFT JOIN approvals ap ON dv.version_id = ap.version_id
+                WHERE dv.element_id = ? AND dv.is_active = 0
+                GROUP BY dv.version_id
+                ORDER BY dv.version_number DESC
+            """, (element_id,))
+            return [dict(row) for row in cursor.fetchall()]
+
+    def vote_version(self, version_id: int, username: str) -> Tuple[bool, str]:
+        """
+        Vote to approve a version. After 3 votes, version becomes active.
+
+        Args:
+            version_id: ID of the version to vote for
+            username: Username of the voter
+
+        Returns:
+            Tuple of (success, message)
+        """
+        with self.get_connection() as conn:
+            # Check if user already voted
+            cursor = conn.execute(
+                "SELECT approval_id FROM approvals WHERE version_id = ? AND approved_by = ?",
+                (version_id, username)
+            )
+            if cursor.fetchone():
+                return False, "Ja has votat aquesta versió."
+
+            # Record vote
+            conn.execute(
+                "INSERT INTO approvals (version_id, from_state, to_state, approved_by) VALUES (?, 'S0', 'S3', ?)",
+                (version_id, username)
+            )
+
+            # Count total votes
+            cursor = conn.execute(
+                "SELECT COUNT(*) FROM approvals WHERE version_id = ?",
+                (version_id,)
+            )
+            vote_count = cursor.fetchone()[0]
+
+            message = f"Vot registrat! Total vots: {vote_count}/3"
+
+            # If 3 votes reached, activate version
+            if vote_count >= 3:
+                cursor = conn.execute(
+                    "SELECT element_id FROM description_versions WHERE version_id = ?",
+                    (version_id,)
+                )
+                element_id = cursor.fetchone()[0]
+
+                # Deactivate current active version
+                conn.execute(
+                    "UPDATE description_versions SET is_active = 0 WHERE element_id = ?",
+                    (element_id,)
+                )
+
+                # Activate new version
+                conn.execute(
+                    "UPDATE description_versions SET state = 'S3', is_active = 1 WHERE version_id = ?",
+                    (version_id,)
+                )
+                message = "S'han assolit els 3 vots! Aquesta versió ara és l'ACTIVA (S3)."
+
+            conn.commit()
+            return True, message
+
+    def get_project_instances(self, project_id: int) -> List[Dict[str, Any]]:
+        """
+        Get all element instances for a project.
+
+        Args:
+            project_id: ID of the project
+
+        Returns:
+            List of project element instances with element info
+        """
+        with self.get_connection() as conn:
+            cursor = conn.execute("""
+                SELECT pe.project_element_id, pe.instance_code, pe.instance_name,
+                       e.element_name, e.category, e.element_id
+                FROM project_elements pe
+                JOIN elements e ON pe.element_id = e.element_id
+                WHERE pe.project_id = ?
+                ORDER BY e.category, pe.instance_code
+            """, (project_id,))
+            return [dict(row) for row in cursor.fetchall()]
+
+    def get_instance_variable_values(self, project_element_id: int) -> List[Dict[str, Any]]:
+        """
+        Get all variables and their values for a project element instance.
+
+        Args:
+            project_element_id: ID of the project element
+
+        Returns:
+            List of variables with their current values
+        """
+        with self.get_connection() as conn:
+            # Get element_id for this instance
+            cursor = conn.execute(
+                "SELECT element_id FROM project_elements WHERE project_element_id = ?",
+                (project_element_id,)
+            )
+            row = cursor.fetchone()
+            if not row:
+                return []
+            element_id = row[0]
+
+            cursor = conn.execute("""
+                SELECT ev.variable_id, ev.variable_name, ev.unit, ev.variable_type, pev.value
+                FROM element_variables ev
+                LEFT JOIN project_element_values pev
+                     ON ev.variable_id = pev.variable_id AND pev.project_element_id = ?
+                WHERE ev.element_id = ?
+                ORDER BY ev.display_order, ev.variable_name
+            """, (project_element_id, element_id))
+            return [dict(row) for row in cursor.fetchall()]
+
+    def delete_project_element(self, project_element_id: int) -> bool:
+        """
+        Delete a project element instance.
+
+        Args:
+            project_element_id: ID of the project element to delete
+
+        Returns:
+            True if successful
+        """
+        with self.get_connection() as conn:
+            cursor = conn.execute(
+                "DELETE FROM project_elements WHERE project_element_id = ?",
+                (project_element_id,)
+            )
+            conn.commit()
+            return cursor.rowcount > 0
+
+    def create_element_complete(
+        self,
+        element_code: str,
+        element_name: str,
+        category: str,
+        variables: List[Dict[str, Any]],
+        description_template: Optional[str] = None,
+        created_by: Optional[str] = None
+    ) -> Tuple[bool, Any]:
+        """
+        Create an element with variables and optional draft description.
+
+        Args:
+            element_code: Unique code for the element
+            element_name: Name of the element
+            category: Construction category
+            variables: List of variable dicts with keys: nom, tipus, unitat, opcions
+            description_template: Optional initial description template
+            created_by: User creating the element
+
+        Returns:
+            Tuple of (success, element_id or error_message)
+        """
+        # Validate category
+        if not self.validate_category(category):
+            valid_categories = self.get_valid_categories()
+            return False, f"Categoria invàlida '{category}'. Ha de ser una de: {', '.join(valid_categories[:5])}..."
+
+        try:
+            with self.get_connection() as conn:
+                # Create element
+                cursor = conn.execute(
+                    "INSERT INTO elements (element_code, element_name, category, created_by) VALUES (?, ?, ?, ?)",
+                    (element_code, element_name, category, created_by)
+                )
+                element_id = cursor.lastrowid
+
+                # Create variables
+                for var in variables:
+                    var_type = "TEXT" if var.get("tipus") == "LLISTA (Desplegable)" else var.get("tipus", "TEXT")
+                    cursor = conn.execute(
+                        "INSERT INTO element_variables (element_id, variable_name, variable_type, unit) VALUES (?, ?, ?, ?)",
+                        (element_id, var.get("nom"), var_type, var.get("unitat"))
+                    )
+                    var_id = cursor.lastrowid
+
+                    # Create options if provided
+                    if var.get("opcions"):
+                        options = [opt.strip() for opt in str(var["opcions"]).split(",") if opt.strip()]
+                        for i, opt in enumerate(options):
+                            conn.execute(
+                                "INSERT INTO variable_options (variable_id, option_value, display_order) VALUES (?, ?, ?)",
+                                (var_id, opt, i)
+                            )
+
+                # Create draft description if provided
+                if description_template:
+                    conn.execute(
+                        "INSERT INTO description_versions (element_id, description_template, state, is_active, version_number) VALUES (?, ?, 'S0', 0, 1)",
+                        (element_id, description_template)
+                    )
+
+                conn.commit()
+                return True, element_id
+
+        except sqlite3.IntegrityError:
+            return False, "Ja existeix un element amb aquest codi."
+        except Exception as e:
+            return False, str(e)
+
+    def create_project_elements_bulk(
+        self,
+        project_id: int,
+        element_id: int,
+        code_base: str,
+        name_base: str,
+        quantity: int
+    ) -> Tuple[bool, str]:
+        """
+        Create multiple project element instances at once.
+
+        Args:
+            project_id: ID of the project
+            element_id: ID of the element type
+            code_base: Base code for instances
+            name_base: Base name for instances
+            quantity: Number of instances to create
+
+        Returns:
+            Tuple of (success, message)
+        """
+        with self.get_connection() as conn:
+            # Get active version for element
+            cursor = conn.execute(
+                "SELECT version_id FROM description_versions WHERE element_id = ? AND is_active = 1",
+                (element_id,)
+            )
+            row = cursor.fetchone()
+            if not row:
+                return False, "Aquest element no té versió activa (S3)."
+            version_id = row[0]
+
+            try:
+                for i in range(1, quantity + 1):
+                    if quantity > 1:
+                        suffix = f"-{i:02d}"
+                        code_final = f"{code_base}{suffix}"
+                        name_final = f"{name_base} {i}"
+                    else:
+                        code_final = code_base
+                        name_final = name_base
+
+                    cursor = conn.execute("""
+                        INSERT INTO project_elements (project_id, element_id, description_version_id, instance_code, instance_name)
+                        VALUES (?, ?, ?, ?, ?)
+                    """, (project_id, element_id, version_id, code_final, name_final))
+                    pe_id = cursor.lastrowid
+
+                    # Create empty rendered description
+                    conn.execute(
+                        "INSERT INTO rendered_descriptions (project_element_id, rendered_text, is_stale) VALUES (?, '', 1)",
+                        (pe_id,)
+                    )
+
+                conn.commit()
+                return True, f"Afegits {quantity} elements."
+
+            except sqlite3.IntegrityError:
+                return False, "Error: Codi duplicat."
+            except Exception as e:
+                return False, f"Error: {e}"
+
+    def save_instance_values(
+        self,
+        project_element_id: int,
+        values: Dict[int, str],
+        updated_by: Optional[str] = None
+    ) -> bool:
+        """
+        Save multiple variable values for a project element instance.
+
+        Args:
+            project_element_id: ID of the project element
+            values: Dictionary mapping variable_id to value
+            updated_by: User updating the values
+
+        Returns:
+            True if successful
+        """
+        try:
+            with self.get_connection() as conn:
+                for var_id, value in values.items():
+                    conn.execute("""
+                        INSERT INTO project_element_values (project_element_id, variable_id, value)
+                        VALUES (?, ?, ?)
+                        ON CONFLICT(project_element_id, variable_id) DO UPDATE SET value=excluded.value, updated_at=CURRENT_TIMESTAMP
+                    """, (project_element_id, var_id, value))
+                conn.commit()
+                return True
+        except Exception:
+            return False
+
+    def create_draft_version(
+        self,
+        element_id: int,
+        description_template: str
+    ) -> int:
+        """
+        Create a new draft description version (S0 state).
+
+        Args:
+            element_id: ID of the element
+            description_template: Template text
+
+        Returns:
+            version_id of the created draft
+        """
+        with self.get_connection() as conn:
+            # Get next version number
+            cursor = conn.execute(
+                "SELECT MAX(version_number) FROM description_versions WHERE element_id = ?",
+                (element_id,)
+            )
+            result = cursor.fetchone()[0]
+            next_version = (result if result else 0) + 1
+
+            cursor = conn.execute(
+                "INSERT INTO description_versions (element_id, description_template, state, is_active, version_number) VALUES (?, ?, 'S0', 0, ?)",
+                (element_id, description_template, next_version)
+            )
+            conn.commit()
+            return cursor.lastrowid
+
+    def get_user_role(self, username: str) -> str:
+        """
+        Get the role for a user.
+
+        Args:
+            username: Username to look up
+
+        Returns:
+            Role string (viewer, editor, admin) or 'viewer' if not found
+        """
+        with self.get_connection() as conn:
+            cursor = conn.execute(
+                "SELECT role FROM users WHERE username = ?",
+                (username,)
+            )
+            row = cursor.fetchone()
+            return row[0] if row else "viewer"
+
+    def get_users_for_auth(self) -> Dict[str, Dict[str, str]]:
+        """
+        Get users in format needed for streamlit-authenticator.
+
+        Returns:
+            Dictionary with 'usernames' key containing user credentials
+        """
+        with self.get_connection() as conn:
+            cursor = conn.execute(
+                "SELECT username, password_hash, full_name FROM users"
+            )
+            credentials = {"usernames": {}}
+            for row in cursor.fetchall():
+                pwd_hash = row['password_hash']
+                if isinstance(pwd_hash, bytes):
+                    pwd_hash = pwd_hash.decode('utf-8')
+                credentials["usernames"][row['username']] = {
+                    "name": row['full_name'],
+                    "password": pwd_hash
+                }
+            return credentials
 

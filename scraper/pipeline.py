@@ -43,7 +43,7 @@ class ExtractionMode(Enum):
 @dataclass
 class PipelineConfig:
     """Configuration for the CYPE pipeline."""
-    db_path: str = "src/office_data.db"
+    db_path: str = "data/office_data.db"
     max_elements: int = 100
     extraction_mode: ExtractionMode = ExtractionMode.STATIC
     max_retries: int = 3
@@ -515,7 +515,7 @@ class CYPEPipeline:
 def run_sync(
     max_elements: int = 100,
     extraction_mode: ExtractionMode = ExtractionMode.STATIC,
-    db_path: str = "src/office_data.db"
+    db_path: str = "data/office_data.db"
 ) -> PipelineResult:
     """
     Synchronous wrapper for running the pipeline.
@@ -545,7 +545,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='CYPE Pipeline')
     parser.add_argument('--elements', type=int, default=10, help='Max elements')
     parser.add_argument('--mode', choices=['static', 'browser'], default='static')
-    parser.add_argument('--db', default='src/office_data.db', help='Database path')
+    parser.add_argument('--db', default='data/office_data.db', help='Database path')
 
     args = parser.parse_args()
 

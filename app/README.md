@@ -33,7 +33,7 @@ app/
 
 ## Database
 
-Uses: `../src/office_data.db`
+Uses: `../data/office_data.db`
 - **Elements** with variables and description templates
 - **Projects** with element instances
 - **Users** with hashed passwords and roles

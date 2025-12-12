@@ -38,6 +38,7 @@ def test_element(temp_db):
     element_id = temp_db.create_element(
         element_code='TEST_ELEM',
         element_name='Test Element',
+        category='ASCENSOR',
         created_by='test_creator'
     )
     
@@ -69,18 +70,18 @@ class TestProposalCreation:
     
     def test_create_multiple_proposals(self, temp_db, test_element):
         """Test creating multiple proposals for the same element."""
-        # First proposal
+        # First proposal (must include all required: width, height, material)
         v1 = temp_db.create_proposal(
-            test_element, 'Element {width} x {height}', 'architect_1'
+            test_element, 'Element {width} x {height}, {material}', 'architect_1'
         )
         assert temp_db.get_version(v1)['version_number'] == 1
-        
+
         # Second proposal
         v2 = temp_db.create_proposal(
-            test_element, 'Element {width} x {height}, {material}', 'architect_2'
+            test_element, 'Element {width} x {height}, made of {material}', 'architect_2'
         )
         assert temp_db.get_version(v2)['version_number'] == 2
-        
+
         # Third proposal
         v3 = temp_db.create_proposal(
             test_element, 'Element {width} x {height}, {material}, finish: {finish}', 'architect_3'
@@ -230,49 +231,49 @@ class TestActiveVersionManagement:
     
     def test_only_one_active_version(self, temp_db, test_element):
         """Test that only one version can be active at a time."""
-        # Create and activate first version
+        # Create and activate first version (must include all required: width, height, material)
         v1 = temp_db.create_proposal(
-            test_element, 'Element {width} x {height}', 'architect_1'
+            test_element, 'Element {width} x {height}, {material}', 'architect_1'
         )
         temp_db.approve_proposal(v1, 'r1', 'S0->S1')
         temp_db.approve_proposal(v1, 'r2', 'S1->S2')
         temp_db.approve_proposal(v1, 'r3', 'S2->S3')
-        
+
         # Verify v1 is active
         active = temp_db.get_active_version(test_element)
         assert active['version_id'] == v1
-        
+
         # Create and activate second version
         v2 = temp_db.create_proposal(
-            test_element, 'Element {width} x {height}, {material}', 'architect_2'
+            test_element, 'Element {width} x {height}, made of {material}', 'architect_2'
         )
         temp_db.approve_proposal(v2, 'r1', 'S0->S1')
         temp_db.approve_proposal(v2, 'r2', 'S1->S2')
         temp_db.approve_proposal(v2, 'r3', 'S2->S3')
-        
+
         # Verify v2 is now active and v1 is not
         active = temp_db.get_active_version(test_element)
         assert active['version_id'] == v2
-        
+
         v1_version = temp_db.get_version(v1)
         assert v1_version['is_active'] == 0
     
     def test_multiple_versions_different_states(self, temp_db, test_element):
         """Test having multiple versions in different states."""
-        # Version 1: Active (S3)
-        v1 = temp_db.create_proposal(test_element, 'Element {width} x {height}', 'architect_1')
+        # Version 1: Active (S3) - must include all required: width, height, material
+        v1 = temp_db.create_proposal(test_element, 'Element {width} x {height}, {material}', 'architect_1')
         temp_db.approve_proposal(v1, 'r1', 'S0->S1')
         temp_db.approve_proposal(v1, 'r2', 'S1->S2')
         temp_db.approve_proposal(v1, 'r3', 'S2->S3')
-        
+
         # Version 2: Pending (S2)
-        v2 = temp_db.create_proposal(test_element, 'Element {width} x {height}, {material}', 'architect_2')
+        v2 = temp_db.create_proposal(test_element, 'Element {width} x {height}, made of {material}', 'architect_2')
         temp_db.approve_proposal(v2, 'r1', 'S0->S1')
         temp_db.approve_proposal(v2, 'r2', 'S1->S2')
-        
+
         # Version 3: Pending (S0)
         v3 = temp_db.create_proposal(test_element, 'Element {width} x {height}, {material}, finish: {finish}', 'architect_3')
-        
+
         # Verify states
         assert temp_db.get_version(v1)['state'] == 'S3'
         assert temp_db.get_version(v1)['is_active'] == 1
@@ -280,7 +281,7 @@ class TestActiveVersionManagement:
         assert temp_db.get_version(v2)['is_active'] == 0
         assert temp_db.get_version(v3)['state'] == 'S0'
         assert temp_db.get_version(v3)['is_active'] == 0
-        
+
         # Verify active version
         active = temp_db.get_active_version(test_element)
         assert active['version_id'] == v1
@@ -426,23 +427,23 @@ class TestPendingProposals:
     
     def test_get_pending_proposals(self, temp_db, test_element):
         """Test getting pending proposals."""
-        # Create proposals in different states
-        v1 = temp_db.create_proposal(test_element, 'Element {width} x {height}', 'architect_1')
-        v2 = temp_db.create_proposal(test_element, 'Element {width} x {height}, {material}', 'architect_2')
+        # Create proposals in different states (all must include required: width, height, material)
+        v1 = temp_db.create_proposal(test_element, 'Element {width} x {height}, {material}', 'architect_1')
+        v2 = temp_db.create_proposal(test_element, 'Element {width} x {height}, made of {material}', 'architect_2')
         v3 = temp_db.create_proposal(test_element, 'Element {width} x {height}, {material}, {finish}', 'architect_3')
-        
+
         # Move some through workflow
         temp_db.approve_proposal(v1, 'r1', 'S0->S1')
         temp_db.approve_proposal(v1, 'r2', 'S1->S2')
         temp_db.approve_proposal(v1, 'r3', 'S2->S3')  # Not pending anymore
-        
+
         temp_db.approve_proposal(v2, 'r1', 'S0->S1')
-        
+
         # v3 is still in S0
-        
+
         # Get pending proposals
         pending = temp_db.get_pending_proposals()
-        
+
         # Should have v2 (S1) and v3 (S0), but not v1 (S3)
         pending_ids = [p['version_id'] for p in pending]
         assert v2 in pending_ids
@@ -455,20 +456,20 @@ class TestComplexWorkflowScenarios:
     
     def test_replace_active_version(self, temp_db, test_element):
         """Test replacing an active version with a new one."""
-        # Create and activate first version
-        v1 = temp_db.create_proposal(test_element, 'Element {width} x {height}', 'architect_1')
+        # Create and activate first version (must include all required: width, height, material)
+        v1 = temp_db.create_proposal(test_element, 'Element {width} x {height}, {material}', 'architect_1')
         temp_db.approve_proposal(v1, 'r1', 'S0->S1')
         temp_db.approve_proposal(v1, 'r2', 'S1->S2')
         temp_db.approve_proposal(v1, 'r3', 'S2->S3')
-        
+
         assert temp_db.get_active_version(test_element)['version_id'] == v1
-        
+
         # Create and activate second version
-        v2 = temp_db.create_proposal(test_element, 'Element {width} x {height}, {material}', 'architect_2')
+        v2 = temp_db.create_proposal(test_element, 'Element {width} x {height}, made of {material}', 'architect_2')
         temp_db.approve_proposal(v2, 'r1', 'S0->S1')
         temp_db.approve_proposal(v2, 'r2', 'S1->S2')
         temp_db.approve_proposal(v2, 'r3', 'S2->S3')
-        
+
         # v2 should now be active, v1 should be inactive
         assert temp_db.get_active_version(test_element)['version_id'] == v2
         assert temp_db.get_version(v1)['is_active'] == 0
@@ -476,10 +477,10 @@ class TestComplexWorkflowScenarios:
     def test_multiple_elements_independent_workflows(self, temp_db):
         """Test that workflows for different elements are independent."""
         # Create two elements
-        elem1 = temp_db.create_element('ELEM_1', 'Element 1', created_by='test')
+        elem1 = temp_db.create_element('ELEM_1', 'Element 1', category='ASCENSOR', created_by='test')
         temp_db.add_variable(elem1, 'width', 'NUMERIC', is_required=True)
-        
-        elem2 = temp_db.create_element('ELEM_2', 'Element 2', created_by='test')
+
+        elem2 = temp_db.create_element('ELEM_2', 'Element 2', category='CARPINTERIA', created_by='test')
         temp_db.add_variable(elem2, 'height', 'NUMERIC', is_required=True)
         
         # Create and activate version for elem1
