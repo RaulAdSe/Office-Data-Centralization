@@ -1,18 +1,25 @@
 import streamlit as st
-import sqlite3
 import pandas as pd
 import os
-import time
+import sys
 import streamlit_authenticator as stauth
 
-# Configuració BBDD
-# Main database location: office_variable_demo/office_data.db
-_script_dir = os.path.dirname(os.path.abspath(__file__))
-DB_NAME = os.path.join(_script_dir, "..", "office_variable_demo", "office_data.db")
+# Add src to path for imports
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
-if not os.path.exists(DB_NAME):
-    st.error("❌ No trobo office_data.db a office_variable_demo/")
+from db_manager import DatabaseManager
+
+# Configuració BBDD
+# Main database location: data/office_data.db
+_script_dir = os.path.dirname(os.path.abspath(__file__))
+DB_PATH = os.path.join(_script_dir, "..", "data", "office_data.db")
+
+if not os.path.exists(DB_PATH):
+    st.error("No trobo office_data.db a data/")
     st.stop()
+
+# Initialize database manager
+db = DatabaseManager(DB_PATH)
 
 st.set_page_config(page_title="Gestor Partides", page_icon="🏗️", layout="wide")
 
@@ -20,54 +27,17 @@ st.set_page_config(page_title="Gestor Partides", page_icon="🏗️", layout="wi
 # 1. GESTIÓ D'USUARIS (INTEGRACIÓ STREAMLIT-AUTHENTICATOR)
 # ==============================================================================
 
-def get_connection():
-    return sqlite3.connect(DB_NAME)
-
-def get_user_role(username):
-    """Recupera el rol de l'usuari des de la BBDD."""
-    conn = get_connection()
-    c = conn.cursor()
-    c.execute("SELECT role FROM users WHERE username = ?", (username,))
-    res = c.fetchone()
-    conn.close()
-    return res[0] if res else "viewer"
-
-def carregar_config_usuaris():
-    """
-    Llegeix la taula 'users' de SQLite i la converteix al format 
-    de diccionari que necessita streamlit-authenticator.
-    """
-    conn = get_connection()
-    df_users = pd.read_sql("SELECT username, password_hash, full_name FROM users", conn)
-    conn.close()
-
-    # Construïm l'estructura de credencials
-    credentials = {"usernames": {}}
-    
-    for _, row in df_users.iterrows():
-        # Assegurar que el hash és string i no bytes
-        pwd_hash = row["password_hash"]
-        if isinstance(pwd_hash, bytes):
-            pwd_hash = pwd_hash.decode('utf-8')
-
-        credentials["usernames"][row["username"]] = {
-            "name": row["full_name"],
-            "password": pwd_hash, 
-        }
-    
-    return credentials
-
 # --- CONFIGURACIÓ DE L'AUTENTICADOR ---
 
 # 1. Carreguem usuaris de la BBDD
-users_config = carregar_config_usuaris()
+users_config = db.get_users_for_auth()
 
 # 2. Configurem la cookie i l'autenticador
 authenticator = stauth.Authenticate(
     credentials=users_config,
-    cookie_name='cype_gestor_cookie', 
-    key='clau_super_secreta_i_aleatoria', 
-    cookie_expiry_days=7, 
+    cookie_name='cype_gestor_cookie',
+    key='clau_super_secreta_i_aleatoria',
+    cookie_expiry_days=7,
 )
 
 # 3. WIDGET DE LOGIN (NOVA SINTAXI)
@@ -78,27 +48,27 @@ authenticator.login('main')
 if st.session_state["authentication_status"] is False:
     st.error('Usuari o contrasenya incorrectes')
     st.stop()
-    
+
 elif st.session_state["authentication_status"] is None:
     st.warning('Si us plau, introdueix les teves credencials.')
     st.stop()
 
 elif st.session_state["authentication_status"] is True:
     # L'usuari ha entrat correctament!
-    
+
     username = st.session_state["username"]
     name = st.session_state["name"]
-    
+
     # Recuperem el rol que no el gestiona la cookie, sinó la BBDD
     if "role" not in st.session_state:
-        st.session_state.role = get_user_role(username)
+        st.session_state.role = db.get_user_role(username)
         # Guardem manualment altres dades si cal
         st.session_state.full_name = name
 
     # --- SIDEBAR AMB LOGOUT ---
     with st.sidebar:
         st.info(f"👤 **{name}**\nRol: {st.session_state.role}")
-        
+
         # Botó de Logout natiu
         authenticator.logout('Tancar Sessió', 'sidebar')
         st.divider()
@@ -107,244 +77,15 @@ elif st.session_state["authentication_status"] is True:
 # 2. APP PRINCIPAL (NOMÉS S'EXECUTA SI LOGUEJAT)
 # ==============================================================================
 
-# --- FUNCIONS BBDD (APP) ---
-
-def get_elements():
-    conn = get_connection()
-    query = """
-        SELECT e.element_id, e.element_code, e.element_name, e.category,
-               dv.version_number as version_activa, dv.description_template
-        FROM elements e
-        LEFT JOIN description_versions dv ON e.element_id = dv.element_id AND dv.is_active = 1
-    """
-    df = pd.read_sql(query, conn)
-    conn.close()
-    return df
-
-def crear_opciones_variable(conn, variable_id, string_opciones):
-    if not string_opciones or str(string_opciones).strip() == "":
-        return
-    opciones = [opt.strip() for opt in str(string_opciones).split(",") if opt.strip()]
-    if opciones:
-        datos_insert = [(variable_id, opt, i) for i, opt in enumerate(opciones)]
-        conn.executemany("INSERT INTO variable_options (variable_id, option_value, display_order) VALUES (?, ?, ?)", datos_insert)
-
-def crear_element_complet(codi, nom, categoria, llista_variables, text_plantilla):
-    conn = get_connection()
-    try:
-        c = conn.cursor()
-        c.execute("INSERT INTO elements (element_code, element_name, category) VALUES (?, ?, ?)", (codi, nom, categoria))
-        elem_id = c.lastrowid
-        
-        for var in llista_variables:
-            tipus_db = "TEXT" if var["tipus"] == "LLISTA (Desplegable)" else var["tipus"]
-            c.execute("INSERT INTO element_variables (element_id, variable_name, variable_type, unit) VALUES (?, ?, ?, ?)", 
-                      (elem_id, var["nom"], tipus_db, var["unitat"]))
-            var_id = c.lastrowid
-            if var["opcions"]:
-                crear_opciones_variable(conn, var_id, var["opcions"])
-        
-        if text_plantilla:
-            c.execute("INSERT INTO description_versions (element_id, description_template, state, is_active, version_number) VALUES (?, ?, 'S0', 0, 1)", 
-                      (elem_id, text_plantilla, ))
-            
-        conn.commit()
-        return True, elem_id
-    except sqlite3.IntegrityError:
-        return False, "Ja existeix un element amb aquest codi."
-    except Exception as e:
-        return False, str(e)
-    finally:
-        conn.close()
-
-def crear_nova_variable(elem_id, nom, tipus, unitat, string_opciones=None):
-    conn = get_connection()
-    try:
-        tipus_db = "TEXT" if tipus == "LLISTA (Desplegable)" else tipus
-        cur = conn.cursor()
-        cur.execute("INSERT INTO element_variables (element_id, variable_name, variable_type, unit) VALUES (?, ?, ?, ?)",
-                     (elem_id, nom, tipus_db, unitat))
-        var_id = cur.lastrowid
-        if string_opciones:
-            crear_opciones_variable(conn, var_id, string_opciones)
-        conn.commit()
-        return True
-    except Exception as e:
-        st.error(f"Error: {e}")
-        return False
-    finally:
-        conn.close()
-
-def votar_versio(version_id):
-    # FEM SERVIR L'USUARI REAL DE LA SESSIÓ
-    usuari = st.session_state.username 
-    
-    conn = get_connection()
-    c = conn.cursor()
-    c.execute("SELECT approval_id FROM approvals WHERE version_id = ? AND approved_by = ?", (version_id, usuari))
-    if c.fetchone():
-        conn.close()
-        return False, "Ja has votat aquesta versió."
-    c.execute("INSERT INTO approvals (version_id, from_state, to_state, approved_by) VALUES (?, 'S0', 'S3', ?)", (version_id, usuari))
-    c.execute("SELECT COUNT(*) FROM approvals WHERE version_id = ?", (version_id,))
-    vots = c.fetchone()[0]
-    missatge = f"Vot registrat! Total vots: {vots}/3"
-    if vots >= 3:
-        c.execute("SELECT element_id FROM description_versions WHERE version_id = ?", (version_id,))
-        elem_id = c.fetchone()[0]
-        c.execute("UPDATE description_versions SET is_active = 0 WHERE element_id = ?", (elem_id,))
-        c.execute("UPDATE description_versions SET state = 'S3', is_active = 1 WHERE version_id = ?", (version_id,))
-        missatge = "🎉 S'han assolit els 3 vots! Aquesta versió ara és l'ACTIVA (S3)."
-    conn.commit()
-    conn.close()
-    return True, missatge
-
-def get_drafts_amb_vots(element_id):
-    conn = get_connection()
-    query = """
-        SELECT dv.version_id, dv.version_number, dv.state, dv.description_template, dv.created_at,
-               COUNT(ap.approval_id) as vots
-        FROM description_versions dv
-        LEFT JOIN approvals ap ON dv.version_id = ap.version_id
-        WHERE dv.element_id = ? AND dv.is_active = 0
-        GROUP BY dv.version_id
-        ORDER BY dv.version_number DESC
-    """
-    df = pd.read_sql(query, conn, params=(element_id,))
-    conn.close()
-    return df
-
-def get_projects():
-    conn = get_connection()
-    df = pd.read_sql("SELECT project_id, project_code, project_name FROM projects", conn)
-    conn.close()
-    return df
-
-def crear_projecte_nou(codi, nom):
-    conn = get_connection()
-    try:
-        conn.execute("INSERT INTO projects (project_code, project_name, status) VALUES (?, ?, 'PLANNING')", (codi, nom))
-        conn.commit()
-        return True
-    except Exception as e:
-        st.error(f"Error: {e}")
-        return False
-    finally:
-        conn.close()
-
-def crear_instancies_massives(project_id, element_id, code_base, name_base, quantitat):
-    conn = get_connection()
-    try:
-        c = conn.cursor()
-        c.execute("SELECT version_id FROM description_versions WHERE element_id = ? AND is_active = 1", (element_id,))
-        res = c.fetchone()
-        if not res:
-            return False, "Aquest element no té versió activa (S3)."
-        version_id = res[0]
-        for i in range(1, quantitat + 1):
-            if quantitat > 1:
-                sufix = f"-{i:02d}"
-                code_final = f"{code_base}{sufix}"
-                name_final = f"{name_base} {i}"
-            else:
-                code_final = code_base
-                name_final = name_base
-            c.execute("""
-                INSERT INTO project_elements (project_id, element_id, description_version_id, instance_code, instance_name)
-                VALUES (?, ?, ?, ?, ?)
-            """, (project_id, element_id, version_id, code_final, name_final))
-            pe_id = c.lastrowid
-            c.execute("INSERT INTO rendered_descriptions (project_element_id, rendered_text, is_stale) VALUES (?, '', 1)", (pe_id,))
-        conn.commit()
-        return True, f"Afegits {quantitat} elements."
-    except sqlite3.IntegrityError:
-        return False, "Error: Codi duplicat."
-    except Exception as e:
-        return False, f"Error: {e}"
-    finally:
-        conn.close()
-
-def esborrar_instancia_projecte(project_element_id):
-    conn = get_connection()
-    try:
-        conn.execute("DELETE FROM project_elements WHERE project_element_id = ?", (project_element_id,))
-        conn.commit()
-        return True
-    except Exception as e:
-        st.error(f"Error: {e}")
-        return False
-    finally:
-        conn.close()
-
-def get_project_instances(project_id):
-    conn = get_connection()
-    query = """
-        SELECT pe.project_element_id, pe.instance_code, pe.instance_name, e.element_name, e.category
-        FROM project_elements pe
-        JOIN elements e ON pe.element_id = e.element_id
-        WHERE pe.project_id = ?
-        ORDER BY e.category, pe.instance_code
-    """
-    df = pd.read_sql(query, conn, params=(project_id,))
-    conn.close()
-    return df
-
-def get_instance_variables_values(project_element_id):
-    conn = get_connection()
-    elem_id = conn.execute("SELECT element_id FROM project_elements WHERE project_element_id = ?", (project_element_id,)).fetchone()[0]
-    query = """
-        SELECT ev.variable_id, ev.variable_name, ev.unit, ev.variable_type, pev.value
-        FROM element_variables ev
-        LEFT JOIN project_element_values pev 
-             ON ev.variable_id = pev.variable_id AND pev.project_element_id = ?
-        WHERE ev.element_id = ?
-    """
-    df = pd.read_sql(query, conn, params=(project_element_id, elem_id))
-    conn.close()
-    return df
-
-def get_variable_options(variable_id):
-    conn = get_connection()
-    query = "SELECT option_value FROM variable_options WHERE variable_id = ? ORDER BY display_order"
-    rows = conn.execute(query, (variable_id,)).fetchall()
-    conn.close()
-    return [r[0] for r in rows]
-
-def get_variable_options_string(variable_id):
-    opts = get_variable_options(variable_id)
-    return ", ".join(opts) if opts else ""
-
-def save_instance_values(project_element_id, updates_dict):
-    conn = get_connection()
-    c = conn.cursor()
-    try:
-        for var_id, valor in updates_dict.items():
-            c.execute("""
-                INSERT INTO project_element_values (project_element_id, variable_id, value)
-                VALUES (?, ?, ?)
-                ON CONFLICT(project_element_id, variable_id) DO UPDATE SET value=excluded.value, updated_at=CURRENT_TIMESTAMP
-            """, (project_element_id, var_id, valor))
-        conn.commit()
-        return True
-    except Exception as e:
-        st.error(f"Error guardant valors: {e}")
-        return False
-    finally:
-        conn.close()
-
-# ==============================================================================
-# 3. INTERFÍCIE PRINCIPAL
-# ==============================================================================
-
 st.sidebar.title("🏗️ Gestor CYPE")
 mode = st.sidebar.radio("Què vols fer?", ["📚 Gestió de Catàleg", "🏗️ Gestió de Projectes"], index=0)
 st.sidebar.markdown("---")
 
 if mode == "📚 Gestió de Catàleg":
-    
+
     sub_mode = st.sidebar.radio("Acció Catàleg:", ["🔍 Editar Existent", "➕ Crear Element"])
     st.sidebar.markdown("---")
-    
+
     if sub_mode == "➕ Crear Element":
         st.title("➕ Crear Element")
         if "wizard_vars" not in st.session_state:
@@ -354,8 +95,11 @@ if mode == "📚 Gestió de Catàleg":
         c1, c2, c3 = st.columns(3)
         c_codi = c1.text_input("Codi (ex: FAN-01)")
         c_nom = c2.text_input("Nom Descriptiu")
-        c_cat = c3.selectbox("Categoria", ["ARQUITECTURA", "ESTRUCTURA", "INSTALACIONES", "ACABADOS"])
-        
+
+        # Use valid categories from database
+        valid_categories = db.get_valid_categories()
+        c_cat = c3.selectbox("Categoria", valid_categories)
+
         st.divider()
         st.subheader("2. Definir Variables")
         with st.container(border=True):
@@ -364,11 +108,11 @@ if mode == "📚 Gestió de Catàleg":
             new_v_nom = vc1.text_input("Nom Variable (sense espais)", key="w_v_nom")
             new_v_tipus = vc2.selectbox("Tipus", ["TEXT", "NUMERIC", "LLISTA (Desplegable)"], key="w_v_tipus")
             new_v_unit = vc3.text_input("Unitat", key="w_v_unit")
-            
+
             new_v_opts = ""
             if new_v_tipus == "LLISTA (Desplegable)":
                 new_v_opts = st.text_input("Opcions (Separades per coma)", placeholder="Temperat, Laminat, Cru", key="w_v_opts")
-            
+
             if st.button("➕ Afegir Variable a la Llista"):
                 if new_v_nom:
                     st.session_state.wizard_vars.append({
@@ -399,11 +143,16 @@ if mode == "📚 Gestió de Catàleg":
         st.divider()
         st.subheader("3. Primera Descripció (Draft S0)")
         c_desc = st.text_area("Plantilla de Text", height=150, placeholder="Enganxa aquí les variables de dalt...", key="w_desc")
-        
+
         st.markdown("---")
         if st.button("💾 GUARDAR ELEMENT", type="primary"):
             if c_codi and c_nom:
-                ok, res = crear_element_complet(c_codi, c_nom, c_cat, st.session_state.wizard_vars, c_desc)
+                ok, res = db.create_element_complete(
+                    c_codi, c_nom, c_cat,
+                    st.session_state.wizard_vars,
+                    c_desc,
+                    created_by=st.session_state.username
+                )
                 if ok:
                     st.balloons()
                     st.success(f"Element {c_nom} creat correctament!")
@@ -415,12 +164,14 @@ if mode == "📚 Gestió de Catàleg":
 
     else:
         st.sidebar.subheader("📍 Navegador Catàleg")
-        df_elements = get_elements()
+        elements_list = db.list_elements_with_active_version()
+        df_elements = pd.DataFrame(elements_list)
+
         if df_elements.empty:
             st.error("BBDD buida.")
             st.stop()
 
-        categorias = ["Totes"] + list(df_elements['category'].unique())
+        categorias = ["Totes"] + list(df_elements['category'].dropna().unique())
         cat_filter = st.sidebar.selectbox("Filtrar Categoria", categorias)
         if cat_filter != "Totes":
             df_elements = df_elements[df_elements['category'] == cat_filter]
@@ -445,19 +196,19 @@ if mode == "📚 Gestió de Catàleg":
             col_vars, col_edit = st.columns([1, 2])
             with col_vars:
                 st.subheader("Variables")
-                conn = get_connection()
-                vars_df = pd.read_sql("SELECT variable_id, variable_name, unit, variable_type FROM element_variables WHERE element_id = ?", conn, params=(elem_id,))
-                conn.close()
-                if not vars_df.empty:
+                vars_list = db.get_element_variables(elem_id)
+
+                if vars_list:
                     st.caption("Clica el codi per copiar:")
-                    for idx, row in vars_df.iterrows():
-                        var_code = f"{{{row['variable_name']}}}"
+                    for var in vars_list:
+                        var_code = f"{{{var['variable_name']}}}"
                         st.code(var_code, language="text")
-                        opts_str = get_variable_options_string(row['variable_id'])
-                        if opts_str:
-                            st.caption(f"⬆️ {row['variable_type']} (Ops: {opts_str[:20]}...)")
+                        options = var.get('options', [])
+                        if options:
+                            opts_str = ", ".join([o['option_value'] for o in options[:3]])
+                            st.caption(f"⬆️ {var['variable_type']} (Ops: {opts_str}...)")
                         else:
-                            st.caption(f"⬆️ {row['variable_type']}")
+                            st.caption(f"⬆️ {var['variable_type']}")
                 else:
                     st.info("Aquest element no té variables.")
 
@@ -471,9 +222,20 @@ if mode == "📚 Gestió de Catàleg":
                         e_v_opts = st.text_input("Opcions (Separades per coma)", placeholder="A, B, C", key="e_v_opts")
                     if st.button("Crear Variable"):
                         if e_v_nom:
-                            if crear_nova_variable(elem_id, e_v_nom, e_v_tipus, e_v_unit, e_v_opts):
+                            try:
+                                # Parse options if provided
+                                options_list = None
+                                if e_v_opts:
+                                    options_list = [
+                                        {'option_value': opt.strip(), 'display_order': i}
+                                        for i, opt in enumerate(e_v_opts.split(',')) if opt.strip()
+                                    ]
+                                var_type = "TEXT" if e_v_tipus == "LLISTA (Desplegable)" else e_v_tipus
+                                db.add_variable(elem_id, e_v_nom, var_type, e_v_unit, options=options_list)
                                 st.success(f"Variable '{e_v_nom}' creada!")
                                 st.rerun()
+                            except Exception as e:
+                                st.error(f"Error: {e}")
                         else:
                             st.error("Cal un nom.")
 
@@ -482,30 +244,23 @@ if mode == "📚 Gestió de Catàleg":
                 nou_text = st.text_area("Plantilla", height=200, placeholder="Enganxa aquí les variables...")
                 if st.button("💾 Guardar Esborrany"):
                     if nou_text:
-                        conn = get_connection()
-                        c = conn.cursor()
-                        c.execute("SELECT MAX(version_number) FROM description_versions WHERE element_id = ?", (elem_id,))
-                        res = c.fetchone()[0]
-                        nova_ver = (res if res else 0) + 1
-                        c.execute("INSERT INTO description_versions (element_id, description_template, state, is_active, version_number) VALUES (?, ?, 'S0', 0, ?)", (elem_id, nou_text, nova_ver))
-                        conn.commit()
-                        conn.close()
+                        db.create_draft_version(elem_id, nou_text)
                         st.success("Guardat!")
                         st.rerun()
 
         with tab2:
             st.subheader("Control de Versions")
-            df_drafts = get_drafts_amb_vots(elem_id)
-            if df_drafts.empty:
+            drafts = db.get_drafts_with_votes(elem_id)
+            if not drafts:
                 st.write("No hi ha esborranys pendents.")
-            for index, row in df_drafts.iterrows():
+            for draft in drafts:
                 with st.container(border=True):
                     cols = st.columns([1, 4, 2])
-                    cols[0].write(f"### v{row['version_number']}")
-                    cols[1].markdown(f"**Text:** {row['description_template']}")
-                    cols[2].progress(row['vots'] / 3, text=f"{row['vots']}/3")
-                    if cols[2].button(f"👍 Aprovar", key=f"btn_{row['version_id']}"):
-                        ok, msg = votar_versio(row['version_id'])
+                    cols[0].write(f"### v{draft['version_number']}")
+                    cols[1].markdown(f"**Text:** {draft['description_template']}")
+                    cols[2].progress(draft['vots'] / 3, text=f"{draft['vots']}/3")
+                    if cols[2].button(f"👍 Aprovar", key=f"btn_{draft['version_id']}"):
+                        ok, msg = db.vote_version(draft['version_id'], st.session_state.username)
                         if ok:
                             st.balloons()
                             st.success(msg)
@@ -514,7 +269,7 @@ if mode == "📚 Gestió de Catàleg":
                             st.warning(msg)
 
 elif mode == "🏗️ Gestió de Projectes":
-    
+
     st.sidebar.subheader("📂 Projectes")
     with st.sidebar.expander("➕ Crear Nou Projecte"):
         with st.form("new_proy_form"):
@@ -522,21 +277,27 @@ elif mode == "🏗️ Gestió de Projectes":
             n_proy = st.text_input("Nom")
             if st.form_submit_button("Crear"):
                 if c_proy and n_proy:
-                    crear_projecte_nou(c_proy, n_proy)
-                    st.success("Projecte creat!")
-                    st.rerun()
+                    try:
+                        db.create_project(c_proy, n_proy, created_by=st.session_state.username)
+                        st.success("Projecte creat!")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Error: {e}")
 
-    df_proy = get_projects()
+    projects_list = db.list_projects()
+    df_proy = pd.DataFrame(projects_list)
+
     if df_proy.empty:
         st.info("Crea un projecte primer.")
     else:
         opcions_proy = df_proy.apply(lambda x: f"{x['project_code']} - {x['project_name']}", axis=1).tolist()
         sel_proy = st.sidebar.selectbox("Projecte Actiu", opcions_proy)
         proy_id = int(df_proy[df_proy['project_code'] == sel_proy.split(" - ")[0]].iloc[0]['project_id'])
-        
+
         st.sidebar.subheader("🧱 Afegir Elements")
         with st.sidebar.expander("➕ Afegir / Multiplicar", expanded=True):
-            df_cat = get_elements()
+            elements_list = db.list_elements_with_active_version()
+            df_cat = pd.DataFrame(elements_list)
             cats = df_cat.apply(lambda x: f"{x['element_code']} - {x['element_name']}", axis=1).tolist()
             elem_to_add = st.selectbox("Element base", cats)
             col_a, col_b = st.columns(2)
@@ -546,7 +307,7 @@ elif mode == "🏗️ Gestió de Projectes":
             if st.button("Afegir Element(s)"):
                 if inst_code and inst_name:
                     e_id = int(df_cat[df_cat['element_code'] == elem_to_add.split(" - ")[0]].iloc[0]['element_id'])
-                    ok, msg = crear_instancies_massives(proy_id, e_id, inst_code, inst_name, quantitat)
+                    ok, msg = db.create_project_elements_bulk(proy_id, e_id, inst_code, inst_name, quantitat)
                     if ok:
                         st.success(msg)
                         st.rerun()
@@ -556,30 +317,32 @@ elif mode == "🏗️ Gestió de Projectes":
                     st.error("Dades incompletes.")
 
         st.title("📋 Llistat d'Elements del Projecte")
-        df_inst = get_project_instances(proy_id)
-        if df_inst.empty:
+        instances = db.get_project_instances(proy_id)
+
+        if not instances:
             st.warning("Projecte buit.")
         else:
-            for index, row in df_inst.iterrows():
-                with st.expander(f"📍 {row['instance_code']} - {row['instance_name']} ({row['element_name']})"):
+            for inst in instances:
+                with st.expander(f"📍 {inst['instance_code']} - {inst['instance_name']} ({inst['element_name']})"):
                     col_del, col_edit = st.columns([1, 5])
                     with col_del:
-                        if st.button("🗑️ Esborrar", key=f"del_{row['project_element_id']}", type="primary"):
-                            esborrar_instancia_projecte(row['project_element_id'])
+                        if st.button("🗑️ Esborrar", key=f"del_{inst['project_element_id']}", type="primary"):
+                            db.delete_project_element(inst['project_element_id'])
                             st.rerun()
                     with col_edit:
                         st.write("**Editar Valors Tècnics:**")
-                        df_vals = get_instance_variables_values(row['project_element_id'])
+                        var_values = db.get_instance_variable_values(inst['project_element_id'])
                         updates = {}
-                        if df_vals.empty:
+                        if not var_values:
                             st.caption("Sense variables.")
                         else:
-                            with st.form(key=f"form_{row['project_element_id']}"):
+                            with st.form(key=f"form_{inst['project_element_id']}"):
                                 c_form = st.columns(3)
-                                for i, r_var in df_vals.iterrows():
-                                    val_act = r_var['value'] if pd.notna(r_var['value']) else ""
-                                    lbl = f"{r_var['variable_name']} ({r_var['unit']})"
-                                    opciones = get_variable_options(r_var['variable_id'])
+                                for i, var in enumerate(var_values):
+                                    val_act = var['value'] if var['value'] else ""
+                                    lbl = f"{var['variable_name']} ({var['unit']})" if var['unit'] else var['variable_name']
+                                    var_options = db.get_variable_options(var['variable_id'])
+                                    opciones = [o['option_value'] for o in var_options]
                                     with c_form[i % 3]:
                                         if opciones:
                                             idx_sel = 0
@@ -588,10 +351,10 @@ elif mode == "🏗️ Gestió de Projectes":
                                             elif val_act != "":
                                                 opciones.insert(0, val_act)
                                                 idx_sel = 0
-                                            new_v = st.selectbox(lbl, opciones, index=idx_sel, key=f"sel_{row['project_element_id']}_{r_var['variable_id']}")
+                                            new_v = st.selectbox(lbl, opciones, index=idx_sel, key=f"sel_{inst['project_element_id']}_{var['variable_id']}")
                                         else:
-                                            new_v = st.text_input(lbl, value=val_act, key=f"in_{row['project_element_id']}_{r_var['variable_id']}")
-                                        updates[r_var['variable_id']] = new_v
+                                            new_v = st.text_input(lbl, value=val_act, key=f"in_{inst['project_element_id']}_{var['variable_id']}")
+                                        updates[var['variable_id']] = new_v
                                 if st.form_submit_button("💾 Guardar Canvis"):
-                                    save_instance_values(row['project_element_id'], updates)
+                                    db.save_instance_values(inst['project_element_id'], updates)
                                     st.toast("Guardat!", icon="✅")

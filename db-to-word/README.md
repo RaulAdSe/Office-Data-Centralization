@@ -14,7 +14,7 @@ SQLite Database → Python Scripts → Excel Files → Word Mail Merge → Const
 ```
 
 ### Key Components
-1. **Database Integration**: Connects to actual project database at `/Users/rauladell/Work/Office-Data-Centralization/src/office_data.db`
+1. **Database Integration**: Connects to actual project database at `/Users/rauladell/Work/Office-Data-Centralization/data/office_data.db`
 2. **Variable Processing**: Handles 32+ construction variables per element (dimensions, materials, locations, etc.)
 3. **Description Rendering**: Substitutes real variable values into technical description templates
 4. **Excel Generation**: Creates Mail Merge-optimized Excel files with multiple sheet options
@@ -72,15 +72,7 @@ Main export script that:
 4. Generates both comprehensive and category-specific sheets
 5. Ensures 100% complete rendered descriptions
 
-#### `gestor_db.py`
-Database population script that:
-1. Creates sample project data using real CYPE construction elements
-2. Populates 10 elements across 4 construction categories
-3. Fills all variable values using database defaults
-4. Ensures proper template-to-variable mappings
-
-#### `renderizar_y_exportar.py`
-Original export system (from intern's PR#6) for individual category sheets.
+*Note: Database management is handled by `src/db_manager.py` which provides comprehensive CRUD operations for elements, variables, versions, projects, and rendering.*
 
 ### Description Rendering System
 
@@ -244,7 +236,7 @@ excel_exports/MADRID-OFFICE-2024_FINAL_WITH_CATEGORIES.xlsx
 
 ## 📚 Additional Resources
 
-- **Project Database**: `/Users/rauladell/Work/Office-Data-Centralization/src/office_data.db`
+- **Project Database**: `/Users/rauladell/Work/Office-Data-Centralization/data/office_data.db`
 - **Schema Documentation**: `/Users/rauladell/Work/Office-Data-Centralization/src/schema.sql`
 - **Construction Categories**: `construction_categories.py`
 - **Test Database**: `tests/test_e2e.db`

@@ -151,7 +151,7 @@ config = PipelineConfig(
     max_elements=100,
     extraction_mode=ExtractionMode.STATIC,  # or BROWSER
     max_retries=3,
-    db_path="src/office_data.db",
+    db_path="data/office_data.db",
 )
 
 # Run complete pipeline
@@ -1043,7 +1043,7 @@ config = PipelineConfig(
     max_retries=3,
     retry_delay=1.0,
     timeout=30000,
-    db_path="src/office_data.db",
+    db_path="data/office_data.db",
 )
 
 pipeline = CYPEPipeline(config)

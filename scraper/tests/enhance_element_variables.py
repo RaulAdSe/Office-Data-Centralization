@@ -103,7 +103,7 @@ def add_variables_to_database(db_path, element_id, variables):
 
 def main():
     """Main extraction process"""
-    db_path = "../src/office_data.db"
+    db_path = "../data/office_data.db"
     extractor = EnhancedElementExtractor()
     
     print("=" * 80)

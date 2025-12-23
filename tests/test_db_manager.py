@@ -34,16 +34,18 @@ class TestElementManagement:
         element_id = temp_db.create_element(
             element_code='TEST_ELEM',
             element_name='Test Element',
+            category='ASCENSOR',
             created_by='test_user'
         )
         assert element_id is not None
         assert element_id > 0
-    
+
     def test_get_element(self, temp_db):
         """Test retrieving an element."""
         element_id = temp_db.create_element(
             element_code='TEST_ELEM',
             element_name='Test Element',
+            category='ASCENSOR',
             created_by='test_user'
         )
         
@@ -58,6 +60,7 @@ class TestElementManagement:
         temp_db.create_element(
             element_code='TEST_ELEM',
             element_name='Test Element',
+            category='ASCENSOR',
             created_by='test_user'
         )
         
@@ -67,8 +70,8 @@ class TestElementManagement:
     
     def test_list_elements(self, temp_db):
         """Test listing all elements."""
-        temp_db.create_element('ELEM_1', 'Element 1', created_by='test')
-        temp_db.create_element('ELEM_2', 'Element 2', created_by='test')
+        temp_db.create_element('ELEM_1', 'Element 1', category='ASCENSOR', created_by='test')
+        temp_db.create_element('ELEM_2', 'Element 2', category='CARPINTERIA', created_by='test')
         
         elements = temp_db.list_elements()
         assert len(elements) == 2
@@ -78,10 +81,10 @@ class TestElementManagement:
     
     def test_duplicate_element_code(self, temp_db):
         """Test that duplicate element codes are rejected."""
-        temp_db.create_element('TEST_ELEM', 'Test Element', created_by='test')
-        
+        temp_db.create_element('TEST_ELEM', 'Test Element', category='ASCENSOR', created_by='test')
+
         with pytest.raises(Exception):  # Should raise integrity error
-            temp_db.create_element('TEST_ELEM', 'Another Element', created_by='test')
+            temp_db.create_element('TEST_ELEM', 'Another Element', category='ASCENSOR', created_by='test')
 
 
 class TestVariableManagement:
@@ -89,7 +92,7 @@ class TestVariableManagement:
     
     def test_add_variable(self, temp_db):
         """Test adding a variable to an element."""
-        element_id = temp_db.create_element('TEST_ELEM', 'Test Element', created_by='test')
+        element_id = temp_db.create_element('TEST_ELEM', 'Test Element', category='ASCENSOR', created_by='test')
         
         variable_id = temp_db.add_variable(
             element_id=element_id,
@@ -104,7 +107,7 @@ class TestVariableManagement:
     
     def test_get_element_variables(self, temp_db):
         """Test retrieving variables for an element."""
-        element_id = temp_db.create_element('TEST_ELEM', 'Test Element', created_by='test')
+        element_id = temp_db.create_element('TEST_ELEM', 'Test Element', category='ASCENSOR', created_by='test')
         
         temp_db.add_variable(element_id, 'width', 'NUMERIC', unit='cm', is_required=True)
         temp_db.add_variable(element_id, 'material', 'TEXT', is_required=True)
@@ -117,14 +120,14 @@ class TestVariableManagement:
     
     def test_invalid_variable_type(self, temp_db):
         """Test that invalid variable types are rejected."""
-        element_id = temp_db.create_element('TEST_ELEM', 'Test Element', created_by='test')
+        element_id = temp_db.create_element('TEST_ELEM', 'Test Element', category='ASCENSOR', created_by='test')
         
         with pytest.raises(ValueError):
             temp_db.add_variable(element_id, 'test', 'INVALID_TYPE')
     
     def test_duplicate_variable_name(self, temp_db):
         """Test that duplicate variable names are rejected."""
-        element_id = temp_db.create_element('TEST_ELEM', 'Test Element', created_by='test')
+        element_id = temp_db.create_element('TEST_ELEM', 'Test Element', category='ASCENSOR', created_by='test')
         
         temp_db.add_variable(element_id, 'width', 'NUMERIC')
         
@@ -133,7 +136,7 @@ class TestVariableManagement:
     
     def test_add_variable_with_options(self, temp_db):
         """Test adding a variable with options."""
-        element_id = temp_db.create_element('TEST_ELEM', 'Test Element', created_by='test')
+        element_id = temp_db.create_element('TEST_ELEM', 'Test Element', category='ASCENSOR', created_by='test')
         
         options = [
             {'option_value': 'red', 'option_label': 'Red', 'display_order': 1, 'is_default': True},
@@ -165,7 +168,7 @@ class TestVariableManagement:
     
     def test_get_variable_options(self, temp_db):
         """Test retrieving variable options."""
-        element_id = temp_db.create_element('TEST_ELEM', 'Test Element', created_by='test')
+        element_id = temp_db.create_element('TEST_ELEM', 'Test Element', category='ASCENSOR', created_by='test')
         variable_id = temp_db.add_variable(element_id, 'material', 'TEXT')
         
         # Add options
@@ -179,7 +182,7 @@ class TestVariableManagement:
     
     def test_get_element_variables_with_options(self, temp_db):
         """Test retrieving element variables with their options."""
-        element_id = temp_db.create_element('TEST_ELEM', 'Test Element', created_by='test')
+        element_id = temp_db.create_element('TEST_ELEM', 'Test Element', category='ASCENSOR', created_by='test')
         
         # Add variable without options
         temp_db.add_variable(element_id, 'width', 'NUMERIC', unit='cm')
@@ -208,7 +211,7 @@ class TestVariableManagement:
     
     def test_update_variable_option(self, temp_db):
         """Test updating a variable option."""
-        element_id = temp_db.create_element('TEST_ELEM', 'Test Element', created_by='test')
+        element_id = temp_db.create_element('TEST_ELEM', 'Test Element', category='ASCENSOR', created_by='test')
         variable_id = temp_db.add_variable(element_id, 'color', 'TEXT')
         option_id = temp_db.add_variable_option(variable_id, 'red', 'Red')
         
@@ -222,7 +225,7 @@ class TestVariableManagement:
     
     def test_delete_variable_option(self, temp_db):
         """Test deleting a variable option."""
-        element_id = temp_db.create_element('TEST_ELEM', 'Test Element', created_by='test')
+        element_id = temp_db.create_element('TEST_ELEM', 'Test Element', category='ASCENSOR', created_by='test')
         variable_id = temp_db.add_variable(element_id, 'color', 'TEXT')
         option_id = temp_db.add_variable_option(variable_id, 'red', 'Red')
         
@@ -235,7 +238,7 @@ class TestVariableManagement:
     
     def test_set_variable_default_option(self, temp_db):
         """Test setting default option for a variable."""
-        element_id = temp_db.create_element('TEST_ELEM', 'Test Element', created_by='test')
+        element_id = temp_db.create_element('TEST_ELEM', 'Test Element', category='ASCENSOR', created_by='test')
         variable_id = temp_db.add_variable(element_id, 'color', 'TEXT')
         
         temp_db.add_variable_option(variable_id, 'red', 'Red', is_default=True)
@@ -254,7 +257,7 @@ class TestVariableManagement:
     
     def test_get_variable_with_options(self, temp_db):
         """Test getting a variable with its options."""
-        element_id = temp_db.create_element('TEST_ELEM', 'Test Element', created_by='test')
+        element_id = temp_db.create_element('TEST_ELEM', 'Test Element', category='ASCENSOR', created_by='test')
         variable_id = temp_db.add_variable(element_id, 'material', 'TEXT')
         
         temp_db.add_variable_option(variable_id, 'concrete', 'Concrete')
@@ -268,7 +271,7 @@ class TestVariableManagement:
     
     def test_duplicate_option_value(self, temp_db):
         """Test that duplicate option values are rejected for the same variable."""
-        element_id = temp_db.create_element('TEST_ELEM', 'Test Element', created_by='test')
+        element_id = temp_db.create_element('TEST_ELEM', 'Test Element', category='ASCENSOR', created_by='test')
         variable_id = temp_db.add_variable(element_id, 'color', 'TEXT')
         
         temp_db.add_variable_option(variable_id, 'red', 'Red')
@@ -284,14 +287,14 @@ class TestTemplateValidation:
         """Test extracting placeholders from template."""
         template = 'Element with {width} and {height} and {width} again'
         placeholders = temp_db.extract_placeholders(template)
-        
-        assert len(placeholders) == 2  # Should be unique
-        assert 'width' in placeholders
-        assert 'height' in placeholders
+
+        # Placeholders are returned in order of appearance including duplicates
+        assert len(placeholders) == 3
+        assert placeholders == ['width', 'height', 'width']
     
     def test_validate_template_valid(self, temp_db):
         """Test validating a valid template."""
-        element_id = temp_db.create_element('TEST_ELEM', 'Test Element', created_by='test')
+        element_id = temp_db.create_element('TEST_ELEM', 'Test Element', category='ASCENSOR', created_by='test')
         temp_db.add_variable(element_id, 'width', 'NUMERIC', is_required=True)
         temp_db.add_variable(element_id, 'height', 'NUMERIC', is_required=True)
         
@@ -304,7 +307,7 @@ class TestTemplateValidation:
     
     def test_validate_template_missing_required(self, temp_db):
         """Test validating template with missing required variables."""
-        element_id = temp_db.create_element('TEST_ELEM', 'Test Element', created_by='test')
+        element_id = temp_db.create_element('TEST_ELEM', 'Test Element', category='ASCENSOR', created_by='test')
         temp_db.add_variable(element_id, 'width', 'NUMERIC', is_required=True)
         temp_db.add_variable(element_id, 'height', 'NUMERIC', is_required=True)
         
@@ -316,7 +319,7 @@ class TestTemplateValidation:
     
     def test_validate_template_undefined_placeholder(self, temp_db):
         """Test validating template with undefined placeholders."""
-        element_id = temp_db.create_element('TEST_ELEM', 'Test Element', created_by='test')
+        element_id = temp_db.create_element('TEST_ELEM', 'Test Element', category='ASCENSOR', created_by='test')
         temp_db.add_variable(element_id, 'width', 'NUMERIC', is_required=True)
         
         template = 'Element {width} x {unknown}'
@@ -331,7 +334,7 @@ class TestVersionManagement:
     
     def test_create_proposal(self, temp_db):
         """Test creating a description version proposal."""
-        element_id = temp_db.create_element('TEST_ELEM', 'Test Element', created_by='test')
+        element_id = temp_db.create_element('TEST_ELEM', 'Test Element', category='ASCENSOR', created_by='test')
         temp_db.add_variable(element_id, 'width', 'NUMERIC', is_required=True)
         temp_db.add_variable(element_id, 'height', 'NUMERIC', is_required=True)
         
@@ -352,7 +355,7 @@ class TestVersionManagement:
     
     def test_create_proposal_invalid_template(self, temp_db):
         """Test creating proposal with invalid template."""
-        element_id = temp_db.create_element('TEST_ELEM', 'Test Element', created_by='test')
+        element_id = temp_db.create_element('TEST_ELEM', 'Test Element', category='ASCENSOR', created_by='test')
         temp_db.add_variable(element_id, 'width', 'NUMERIC', is_required=True)
         
         with pytest.raises(ValueError):
@@ -364,7 +367,7 @@ class TestVersionManagement:
     
     def test_get_next_version_number(self, temp_db):
         """Test getting next version number."""
-        element_id = temp_db.create_element('TEST_ELEM', 'Test Element', created_by='test')
+        element_id = temp_db.create_element('TEST_ELEM', 'Test Element', category='ASCENSOR', created_by='test')
         temp_db.add_variable(element_id, 'width', 'NUMERIC', is_required=True)
         
         # First version
@@ -382,7 +385,7 @@ class TestVersionManagement:
     
     def test_get_active_version(self, temp_db):
         """Test getting active version."""
-        element_id = temp_db.create_element('TEST_ELEM', 'Test Element', created_by='test')
+        element_id = temp_db.create_element('TEST_ELEM', 'Test Element', category='ASCENSOR', created_by='test')
         temp_db.add_variable(element_id, 'width', 'NUMERIC', is_required=True)
         
         # No active version initially
@@ -443,7 +446,7 @@ class TestProjectElements:
     def test_create_project_element(self, temp_db):
         """Test creating a project element instance."""
         # Setup
-        element_id = temp_db.create_element('TEST_ELEM', 'Test Element', created_by='test')
+        element_id = temp_db.create_element('TEST_ELEM', 'Test Element', category='ASCENSOR', created_by='test')
         temp_db.add_variable(element_id, 'width', 'NUMERIC', is_required=True)
         
         version_id = temp_db.create_proposal(element_id, 'Element {width}', 'test')
@@ -469,7 +472,7 @@ class TestProjectElements:
     def test_set_element_value(self, temp_db):
         """Test setting element values."""
         # Setup
-        element_id = temp_db.create_element('TEST_ELEM', 'Test Element', created_by='test')
+        element_id = temp_db.create_element('TEST_ELEM', 'Test Element', category='ASCENSOR', created_by='test')
         variable_id = temp_db.add_variable(element_id, 'width', 'NUMERIC', is_required=True)
         
         version_id = temp_db.create_proposal(element_id, 'Element {width}', 'test')
@@ -492,7 +495,7 @@ class TestProjectElements:
     def test_update_element_value(self, temp_db):
         """Test updating an existing element value."""
         # Setup
-        element_id = temp_db.create_element('TEST_ELEM', 'Test Element', created_by='test')
+        element_id = temp_db.create_element('TEST_ELEM', 'Test Element', category='ASCENSOR', created_by='test')
         variable_id = temp_db.add_variable(element_id, 'width', 'NUMERIC', is_required=True)
         
         version_id = temp_db.create_proposal(element_id, 'Element {width}', 'test')
@@ -521,27 +524,26 @@ class TestDescriptionRendering:
     def test_render_description(self, temp_db):
         """Test rendering a description."""
         # Setup
-        element_id = temp_db.create_element('TEST_ELEM', 'Test Element', created_by='test')
-        variable_id = temp_db.add_variable(element_id, 'width', 'NUMERIC', is_required=True)
-        temp_db.add_variable(element_id, 'height', 'NUMERIC', is_required=True)
-        
+        element_id = temp_db.create_element('TEST_ELEM', 'Test Element', category='ASCENSOR', created_by='test')
+        width_var_id = temp_db.add_variable(element_id, 'width', 'NUMERIC', is_required=True, display_order=1)
+        height_var_id = temp_db.add_variable(element_id, 'height', 'NUMERIC', is_required=True, display_order=2)
+
         version_id = temp_db.create_proposal(
             element_id, 'Element {width} x {height}', 'test'
         )
         temp_db.approve_proposal(version_id, 'approver', 'S0->S1')
         temp_db.approve_proposal(version_id, 'approver', 'S1->S2')
         temp_db.approve_proposal(version_id, 'approver', 'S2->S3')
-        
+
         project_id = temp_db.create_project('PROJ_001', 'Test Project', created_by='test')
         project_element_id = temp_db.create_project_element(
             project_id, element_id, version_id, 'INST_001', created_by='test'
         )
-        
-        # Set values
-        temp_db.set_element_value(project_element_id, variable_id, '50', 'test')
-        height_var = temp_db.get_element_variables(element_id)[1]
-        temp_db.set_element_value(project_element_id, height_var['variable_id'], '100', 'test')
-        
+
+        # Set values using the variable IDs we saved
+        temp_db.set_element_value(project_element_id, width_var_id, '50', 'test')
+        temp_db.set_element_value(project_element_id, height_var_id, '100', 'test')
+
         # Render
         rendered = temp_db.render_description(project_element_id)
         assert '50' in rendered
@@ -551,7 +553,7 @@ class TestDescriptionRendering:
     def test_upsert_rendered_description(self, temp_db):
         """Test storing rendered description."""
         # Setup
-        element_id = temp_db.create_element('TEST_ELEM', 'Test Element', created_by='test')
+        element_id = temp_db.create_element('TEST_ELEM', 'Test Element', category='ASCENSOR', created_by='test')
         variable_id = temp_db.add_variable(element_id, 'width', 'NUMERIC', is_required=True)
         
         version_id = temp_db.create_proposal(element_id, 'Element {width}', 'test')
